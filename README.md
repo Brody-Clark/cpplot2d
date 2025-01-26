@@ -1,4 +1,4 @@
-# pltcpp
+# <img src="./icon.png" alt="Project Icon" width="32" height="32" align="center"/> pltcpp
 
 This is a lightweight, header-only 2-D C++ plotting library meant to provide minimalistic line plotting for quick visualization of data. It is designed to work without needing any third party libraries or tools installed. It also includes a print and export feature to print plots to pdf and export to CSV files respectively.
 
