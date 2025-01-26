@@ -1,32 +1,45 @@
-# Prerequisites
-*.d
-
-# Compiled Object files
-*.slo
-*.lo
-*.o
+# Ignore build output directories
 *.obj
-
-# Precompiled Headers
-*.gch
-*.pch
-
-# Compiled Dynamic libraries
-*.so
-*.dylib
-*.dll
-
-# Fortran module files
-*.mod
-*.smod
-
-# Compiled Static libraries
-*.lai
-*.la
-*.a
-*.lib
-
-# Executables
 *.exe
-*.out
-*.app
+*.dll
+*.lib
+*.pdb
+*.ilk
+*.exp
+*.suo
+*.ncb
+*.sdf
+*.ipch
+*.tlog
+*.ilk
+*.cache
+
+# Ignore temporary files
+*.tmp
+*.bak
+*.swp
+*.swo
+
+# Ignore user-specific files
+*.user
+*.sln.docstates
+
+# Ignore Visual Studio cache files
+.vs/
+.vscode/
+.vsconfig
+
+# Ignore third-party dependencies
+vendor/
+node_modules/
+external/
+
+# Ignore other IDE-specific files
+*.sln
+*.sln.docstates
+*.suo
+*.user
+*.userosscache
+.vs/
+.vscode/
+.vsconfig
