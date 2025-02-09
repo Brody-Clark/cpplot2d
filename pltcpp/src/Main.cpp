@@ -1,4 +1,4 @@
-#include <limits>
+/*#include <limits>
 #include <sstream>
 #include <string>
 #include <ctime>
@@ -23,10 +23,10 @@
 #define PLTBORDER_OFFSET double(0.105)
 
 std::vector<POINT> testPoints = { {-20, -20}, { 50, 50 }, {100, 75}, {150, 150}, {200,100}, {800,90} };
+double testPoints2[][2] = { {-20, -20}, { 50, 50 }, {100, 75}, {150, 150}, {200,100}, {800,90} };
 
 
-
-namespace c2pplot {
+namespace c2pplotmain {
 
 	double xDataSpan = 0, yDataSpan = 0;
 	double xPlotDataOffset = 0, yPlotDataOffset = 0;
@@ -84,7 +84,37 @@ namespace c2pplot {
 			y += 12;
 		}
 	}
-	void DrawPoints(HDC hdc, RECT rect, const std::vector <POINT>& points, const size_t& size)
+	void DrawPoints(HDC hdc, RECT rect, const double points[][2], const size_t& size)
+	{
+		const double xPlotOffset = rect.right * PLTBORDER_OFFSET;
+		const double yPlotOffset = rect.bottom * PLTBORDER_OFFSET;
+		const double xPlotSpan = rect.right - 2 * xPlotOffset;
+		const double yPlotSpan = rect.bottom - 2 * yPlotOffset;
+		double xScale = xPlotSpan / (xDataSpan);
+		double yScale = yPlotSpan / yDataSpan;
+
+		HPEN hPen = CreatePen(PS_SOLID, 1, PLTCOLOR_GREEN);
+		SelectObject(hdc, hPen);
+		double p[2];
+		for (int i = 0; i < size; i++)
+		{
+			p[0] = points[i][0];
+			p[1] = points[i][1];
+			int x = static_cast<int>(((p[0] - xPlotDataOffset) * xScale) + xPlotOffset);
+			int y = static_cast<int>(yPlotSpan - ((p[1] - yPlotDataOffset) * yScale) + yPlotOffset);
+
+			if (i > 0)
+			{
+				LineTo(hdc, x, y);
+			}
+			else
+			{
+				MoveToEx(hdc, x, y, NULL);
+			}
+		}
+		DeleteObject(hPen);
+	}
+	void DrawPoints(HDC hdc, RECT rect, const std::vector<std::pair<float, float>>& data, const size_t& size)
 	{
 		const double xPlotOffset = rect.right * PLTBORDER_OFFSET;
 		const double yPlotOffset = rect.bottom * PLTBORDER_OFFSET;
@@ -149,8 +179,8 @@ namespace c2pplot {
 		LineTo(hdc, leftBorderPos, topBorderPos);
 
 		// Draw labels
-		DrawTextAtPosition(hdc, rect.right / 2, rect.bottom - 20, L"XXTTJJ");
-		DrawVerticalTextAtPosition(hdc, rect.left + 10, rect.bottom / 2, L"XXTTJJ");
+		DrawTextAtPosition(hdc, rect.right / 2, rect.bottom - 20, L"X");
+		DrawVerticalTextAtPosition(hdc, rect.left + 10, rect.bottom / 2, L"Y");
 
 		int tickLength = 4;
 		std::wstringstream label;
@@ -189,7 +219,8 @@ namespace c2pplot {
 		DeleteObject(blackBrush);
 
 		DrawAxes(hdc, rect, plotOffsets);
-		DrawPoints(hdc, rect, testPoints, testPoints.size());
+		DrawPoints(hdc, rect, testPoints2, sizeof(testPoints2) / sizeof(testPoints2[0]));
+		//DrawPoints(hdc, rect, testPoints, testPoints.size());
 	}
 
 	void DrawCoordinates(HDC hdc, RECT rect, double x, double y)
@@ -295,7 +326,8 @@ namespace c2pplot {
 			{
 				HBITMAP hBitmap = CaptureWindowContent(hwnd);
 				std::wstringstream wss;
-				wss << L"Plot" << L"_" << GetTimestamp() << L".png";
+				std::string
+					wss << L"Plot" << L"_" << GetTimestamp() << L".png";
 				SaveHBITMAPToFile(hBitmap, wss.str());
 				DeleteObject(hBitmap);
 				MessageBox(hwnd, L"Screenshot saved.", L"Saved", MB_OK);	//TODO: tell where
@@ -375,7 +407,7 @@ namespace c2pplot {
 		const wchar_t CLASS_NAME[] = L"PlotWindowClass";
 
 		WNDCLASS wc = {};
-		wc.lpfnWndProc = c2pplot::WindowProc;
+		wc.lpfnWndProc = c2pplotmain::WindowProc;
 		wc.hInstance = hInstance;
 		wc.lpszClassName = CLASS_NAME;
 		wc.hbrBackground = (HBRUSH)(COLOR_WINDOW + 1);
@@ -385,7 +417,7 @@ namespace c2pplot {
 		HWND hwnd = CreateWindowEx(
 			0,
 			CLASS_NAME,
-			L"Simple 2D Plot",
+			L"Plot",
 			WS_OVERLAPPEDWINDOW,
 			CW_USEDEFAULT,
 			CW_USEDEFAULT,
@@ -402,49 +434,35 @@ namespace c2pplot {
 		}
 
 		// TODO: Header only file wouldnt have acccess to resources folder anyways
-		/*HICON hIcon = (HICON)LoadImage(
-			NULL,
-			L".\\resources\\c2pplot.png",
-			IMAGE_ICON,
-			0,
-			0,
-			LR_LOADFROMFILE | LR_DEFAULTSIZE
-		);
 
-		if (hIcon == NULL)
-		{
-			return 1;
-		}
-		SendMessage(hwnd, WM_SETICON, ICON_BIG, (LPARAM)hIcon);
-		SendMessage(hwnd, WM_SETICON, ICON_SMALL, (LPARAM)hIcon);*/
 
 		// Create the menu
-		HMENU hMenu = CreateMenu();
-		HMENU hFileMenu = CreateMenu();
+HMENU hMenu = CreateMenu();
+HMENU hFileMenu = CreateMenu();
 
-		AppendMenu(hFileMenu, MF_STRING, PLTMENU_SAVE, L"Save");
-		AppendMenu(hFileMenu, MF_STRING, PLTMENU_EXPORT, L"Export To CSV");
-		AppendMenu(hMenu, MF_POPUP, (UINT_PTR)hFileMenu, L"File");
+AppendMenu(hFileMenu, MF_STRING, PLTMENU_SAVE, L"Save");
+AppendMenu(hFileMenu, MF_STRING, PLTMENU_EXPORT, L"Export To CSV");
+AppendMenu(hMenu, MF_POPUP, (UINT_PTR)hFileMenu, L"File");
 
-		SetMenu(hwnd, hMenu);
+SetMenu(hwnd, hMenu);
 
-		ShowWindow(hwnd, nCmdShow);
-		UpdateWindow(hwnd);
+ShowWindow(hwnd, nCmdShow);
+UpdateWindow(hwnd);
 
-		MSG msg = {};
-		while (GetMessage(&msg, NULL, 0, 0))
-		{
-			TranslateMessage(&msg);
-			DispatchMessage(&msg);
-		}
-		ShutdownGDIPlus(gdiplusToken);
-		//DestroyIcon(hIcon);
-		return 0;
+MSG msg = {};
+while (GetMessage(&msg, NULL, 0, 0))
+{
+	TranslateMessage(&msg);
+	DispatchMessage(&msg);
+}
+ShutdownGDIPlus(gdiplusToken);
+//DestroyIcon(hIcon);
+return 0;
 	}
 
 } // c2pplot
-
-int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nCmdShow)
-{
-	return c2pplot::Init(hInstance, hPrevInstance, lpCmdLine, nCmdShow);
-}
+*/
+//int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nCmdShow)
+//{
+//	return c2pplot::Init(hInstance, hPrevInstance, lpCmdLine, nCmdShow);
+//}
