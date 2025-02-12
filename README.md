@@ -12,11 +12,13 @@ This is a cross-platform, header-only 2-D plotting library for C++ meant to prov
 ## Usage
 
 1. **Include the cxpplot header found in `src/`**
-2. **Use the `WinMain` function as the entry point for your application**
-3. **Build your project with the Windows subsystem:**
-    - In your project settings, set the **Linker System** to **Windows**.
 
-## Example
+2. **For Windows: Use the `WinMain` function as the entry point for your application and Build your project with the Windows subsystem:**
+    - In your project settings, set the **Linker System** to **Windows**.
+3. **For Apple idk yet**
+4. **For Linux idk yet**
+
+## Examples
 
 ### Windows
 
