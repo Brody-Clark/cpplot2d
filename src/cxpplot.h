@@ -27,7 +27,7 @@
 #include <algorithm>
 #include <chrono>
 #include <cstdlib>
-#include <cstring> 
+#include <cstring>
 #include <ctime>
 #include <cwchar>
 #include <fstream>
@@ -39,6 +39,7 @@
 #include <type_traits>
 #include <vector>
 #include <utility>
+#include <execution>
 
 #ifdef _WIN32
 #include <windows.h>
@@ -50,7 +51,125 @@
 #include <X11/Xlib.h>
 #include <X11/Xutil.h>
 #elif defined(__APPLE__)
+#ifdef __OBJC__
+#import <Foundation/Foundation.h>
 #import <Cocoa/Cocoa.h>
+
+@interface PlotView : NSView
+@property (nonatomic, strong) NSArray<NSValue *> *dataPoints;
+@property (nonatomic, strong) NSArray<NSNumber *> *mouseCoordinates;
+@property (nonatomic, assign) void (*resizeCallback)(const int&, const int&);
+@end
+extern NSString *const MouseMovedNotification = @"MouseMovedNotification";
+@implementation PlotView
+- (instancetype)initWithFrame:(NSRect)frame {
+	self = [super initWithFrame:frame];
+	if (self) {
+		[self.window setAcceptsMouseMovedEvents:YES];
+		[self addTrackingArea:[[NSTrackingArea alloc] initWithRect:self.bounds
+														   options:(NSTrackingMouseMoved | NSTrackingActiveInKeyWindow)
+															 owner:self
+														  userInfo:nil]];
+	}
+	return self;
+}
+- (void)mouseMoved:(NSEvent *)event {
+	NSPoint location = [self convertPoint:event.locationInWindow fromView:nil];
+
+	// Post notification with mouse position
+	NSDictionary *userInfo = @{@"x": @(location.x), @"y": @(location.y)};
+	[[NSNotificationCenter defaultCenter] postNotificationName:MouseMovedNotification object:self userInfo:userInfo];
+}
+- (void)drawRect:(NSRect)dirtyRect
+{
+	[super drawRect:dirtyRect];
+	
+	[[NSColor whiteColor] setFill];
+	NSRectFill(dirtyRect);  // Clear background
+	
+	[[NSColor blackColor] setStroke]; // Set color for the points
+	
+	// Init graphics context
+	CGContextRef context = [[NSGraphicsContext currentContext] CGContext];
+	CGContextSetStrokeColorWithColor(context, [[NSColor blackColor] CGColor]);
+	CGContextSetLineWidth(context, 1.0);
+	
+	// Start at first value
+	NSValue *firstValue = [self.dataPoints objectAtIndex:0];
+	NSPoint point = [firstValue pointValue];
+	CGContextMoveToPoint(context, point.x, point.y);
+	
+	// Draw lines to each point
+	for (NSValue *pointValue in self.dataPoints)
+	{
+		NSPoint point = [pointValue pointValue];
+		
+		CGContextAddLineToPoint(context, point.x, point.y);
+		CGContextStrokePath(context);
+		CGContextMoveToPoint(context, point.x, point.y);
+		
+	}
+
+}
+
+- (void)windowDidResize:(NSNotification *)notification
+{
+
+}
+
+- (void)updateData:(NSArray<NSValue *> *)newData
+{
+	self.dataPoints = newData;
+	[self setNeedsDisplay:YES];
+}
+
+- (void)viewDidChangeBackingProperties
+{
+	[super viewDidChangeBackingProperties];
+	[self setNeedsDisplay:YES];
+}
+- (void)setFrameSize:(NSSize)newSize
+{
+	[super setFrameSize:newSize];
+	[self setNeedsDisplay:YES];
+}
+- (void)savePlot:(id)sender
+{
+	// Show a save dialog
+	NSSavePanel* savePanel = [NSSavePanel savePanel];
+	NSArray* fileTypes = [NSArray arrayWithObjects:@"png", nil];
+	savePanel.allowedContentTypes = fileTypes;
+	//[savePanel setAllowedFileTypes:@[@"png"]];
+	[savePanel setNameFieldStringValue:@"plot.png"];
+	
+	if ([savePanel runModal] == NSModalResponseOK) {
+		NSURL *saveURL = [savePanel URL];
+
+		// Render view into an image
+		NSBitmapImageRep *imageRep = [self bitmapImageRepForCachingDisplayInRect:self.bounds];
+		[self cacheDisplayInRect:self.bounds toBitmapImageRep:imageRep];
+		
+		// Convert to PNG data
+		NSData *pngData = [imageRep representationUsingType:NSBitmapImageFileTypePNG properties:@{}];
+
+		// Write to file
+		[pngData writeToURL:saveURL atomically:YES];
+	}
+}
+@end
+
+// Window delegate to handle close event
+@interface WindowDelegate : NSObject <NSWindowDelegate>
+@end
+
+@implementation WindowDelegate
+
+- (void)windowWillClose:(NSNotification *)notification {
+	[NSApp stop:nil]; // Stops the event loop when the window closes
+}
+
+@end
+#endif
 #endif
 
 #define PLTMENU_SAVE 1
@@ -63,7 +182,7 @@
 
 #define PLTWINDOW_MIN_X 200
 #define PLTWINDOW_MIN_Y 100
-#define PLTRECT_COORDS {0, 0, 200, 30}	// TODO: this needs to be set depending on OS
+#define PLTRECT_MOUSE_DISPLAY_COORDS {0, 0, 200, 30}    // TODO: this needs to be set depending on OS
 #define PLTBORDER_OFFSET_FACTOR float(0.105)
 
 #define PLOT_CONTINUOUS_DRAW_LIMIT 5000
@@ -74,15 +193,14 @@ namespace cxpplot {
 	public:
 		template<typename T>
 		static void Plot(const std::vector<T>& x, const std::vector<T>& y, const std::string& title = "Plot", const std::string& xLabel = "x", const std::string& yLabel = "y");
-
 	protected:
-
+		
 		class PlotImpl
 		{
 		public:
 			PlotImpl(const std::vector<std::pair<float, float>>& data, const std::string& title, const std::string& xLabel, const std::string& yLabel);
-			virtual void InitWindow() = 0;
-
+			virtual void Show() = 0;
+			virtual ~PlotImpl() = default;
 		protected:
 			static std::string GetTimestamp();
 			virtual bool BrowseForFolder(std::string& outFolder) = 0;
@@ -96,6 +214,14 @@ namespace cxpplot {
 			float dataSpanX = 0;
 			float dataSpanY = 0;
 			size_t datasetSize = 0;
+			
+			struct range2D
+			{
+				float smallestX;
+				float smallestY;
+				float largestX;
+				float largestY;
+			};
 		};
 
 #ifdef _WIN32
@@ -103,7 +229,8 @@ namespace cxpplot {
 		{
 		public:
 			Win32PlotImpl(const std::vector<std::pair<float, float>>& data, const std::string& title, const std::string& xLabel, const std::string& yLabel);
-			void InitWindow() override;
+			~Win32PlotImpl() override;
+			void Show() override;
 
 			virtual bool BrowseForFolder(std::string& outFolder) override;
 
@@ -112,7 +239,6 @@ namespace cxpplot {
 			LRESULT HandleMessage(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
 
 			std::string GetFileName(const std::string& directory);
-
 
 		protected:
 			bool isResizing;
@@ -134,12 +260,36 @@ namespace cxpplot {
 			static LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
 		};
 #endif
+#ifdef __APPLE__
+#ifdef __OBJC__
+	  class CocoaPlotImpl : public PlotImpl
+		{
+		public:
+			CocoaPlotImpl(const std::vector<std::pair<float, float>>& data, const std::string& title, const std::string& xLabel, const std::string& yLabel);
+			~CocoaPlotImpl() override;
+			void Show() override;
+			bool BrowseForFolder(std::string& outFolder) override;
+			void OnResize(const int& newWidth, const int& newHeight);
+			const std::vector<std::pair<float, float>> GetTransformedData(const int windowWidth, const int windowHeight);
+			void OnMouseMove(int x, int y);
+		protected:
+			std::pair<float, float> GetTransformedCoordinates(const int& x,
+															  const int& y,
+															  const int windowWidth,
+															  const int& windowHeight);
+			void SetPlotViewData(const std::vector<std::pair<float, float>>& plotPoints);
+			PlotView* plotView;
+			id resizeObserver;
+			id mouseMoveObserver;
+		};
+#endif
+#endif
 
-
+		// Pointer to Plotter implementation
 		static std::unique_ptr<PlotImpl> PlotImpl_;
-
 	};
-
+	
+	// Initialize static plotter implementation
 	std::unique_ptr<Plot2D::PlotImpl> Plot2D::PlotImpl_ = nullptr;
 
 	Plot2D::PlotImpl::PlotImpl(const std::vector<std::pair<float, float>>& data, const std::string& title, const std::string& xLabel, const std::string& yLabel) :
@@ -179,6 +329,7 @@ namespace cxpplot {
 		plotInnerOffsets.first = smallestX;
 		plotInnerOffsets.second = smallestY;
 	}
+
 	inline std::string Plot2D::PlotImpl::GetTimestamp()
 	{
 		auto now = std::chrono::system_clock::now();
@@ -186,7 +337,11 @@ namespace cxpplot {
 		std::string timestamp;
 
 		std::tm local_time;
-		localtime_s(&local_time, &now_time);
+#if defined(_WIN32)
+	localtime_s(&timeinfo, &now_time);
+#else
+	localtime_r(&now_time, &local_time);
+#endif
 		std::ostringstream oss;
 		oss << std::put_time(&local_time, "%Y%m%d%H%M%S");
 		timestamp = oss.str();
@@ -199,13 +354,19 @@ namespace cxpplot {
 	inline Plot2D::Win32PlotImpl::Win32PlotImpl(const std::vector<std::pair<float, float>>& data,
 		const std::string& title, const std::string& xLabel, const std::string& yLabel) : PlotImpl(data, title, xLabel, yLabel)
 	{
-	}
-	void Plot2D::Win32PlotImpl::InitWindow()
-	{
-
 		Gdiplus::GdiplusStartupInput gdiplusStartupInput;
 		ULONG_PTR gdiplusToken;
 		InitGDIPlus(gdiplusStartupInput, gdiplusToken);
+	}
+	inline Plot2D::Win32PlotImpl:~Win32PlotImpl()
+	{
+		ShutdownGDIPlus(gdiplusToken);
+	}
+	void Plot2D::Win32PlotImpl::Show()
+	{
+//        Gdiplus::GdiplusStartupInput gdiplusStartupInput;
+//        ULONG_PTR gdiplusToken;
+//        InitGDIPlus(gdiplusStartupInput, gdiplusToken);
 
 		HWND hwnd = CreatePlotWindow(NULL, title);
 
@@ -219,7 +380,7 @@ namespace cxpplot {
 			DispatchMessage(&msg);
 		}
 
-		ShutdownGDIPlus(gdiplusToken);
+//        ShutdownGDIPlus(gdiplusToken);
 
 	}
 	void Plot2D::Win32PlotImpl::InitGDIPlus(Gdiplus::GdiplusStartupInput& gdiplusStartupInput, ULONG_PTR& gdiplusToken)
@@ -239,7 +400,7 @@ namespace cxpplot {
 		TextOut(hdc, x, y, std::wstring(text.begin(), text.end()).c_str(), static_cast<int>(text.length()));
 	}
 
-	void  Plot2D::Win32PlotImpl::DrawVerticalTextAtPosition(HDC hdc, int x, int y, const std::string& text)
+	void Plot2D::Win32PlotImpl::DrawVerticalTextAtPosition(HDC hdc, int x, int y, const std::string& text)
 	{
 		SetTextColor(hdc, PLTCOLOR_WHITE);
 		SetBkMode(hdc, TRANSPARENT);
@@ -366,7 +527,7 @@ namespace cxpplot {
 
 		// Set text color and background color
 		SetTextColor(hdc, PLTCOLOR_WHITE);
-		RECT coordinateRect = PLTRECT_COORDS;
+		RECT coordinateRect = PLTRECT_MOUSE_DISPLAY_COORDS;
 		HBRUSH blackBrush = CreateSolidBrush(PLTCOLOR_BLACK);
 		FillRect(hdc, &coordinateRect, blackBrush);
 		DeleteObject(blackBrush);
@@ -579,7 +740,7 @@ namespace cxpplot {
 			if (inside)
 			{
 				isMouseMoving = true;
-				RECT textRect = PLTRECT_COORDS;
+				RECT textRect = PLTRECT_MOUSE_DISPLAY_COORDS;
 				mouseDisplayCoordinates = GetMouseCoordinatesInDataSpace(rect, x, y, plotBorderOffsets);
 				InvalidateRect(hwnd, &textRect, FALSE);
 				UpdateWindow(hwnd);
@@ -614,7 +775,8 @@ namespace cxpplot {
 		std::replace(name.begin(), name.end(), ':', '_');
 		return name;
 	}
-	std::pair<float, float> Plot2D::Win32PlotImpl::GetMouseCoordinatesInDataSpace(RECT rect, const int x, const int y, const std::pair<float, float>& plotBorderOffset)
+	std::pair<float, float> Plot2D::Win32PlotImpl::GetMouseCoordinatesInDataSpace(RECT rect, const int x,
+																				  const int y, const std::pair<float, float>& plotBorderOffset)
 	{
 		if ((x >= plotBorderOffset.first && x <= rect.right - plotBorderOffset.first) &&
 			(y >= plotBorderOffset.second && y <= rect.bottom - plotBorderOffset.second))
@@ -663,6 +825,197 @@ namespace cxpplot {
 #endif
 #pragma endregion
 
+#pragma region APPLE
+#ifdef __APPLE__
+#ifdef __OBJC__
+inline Plot2D::CocoaPlotImpl::CocoaPlotImpl(const std::vector<std::pair<float, float>>& data,
+											const std::string& title,
+											const std::string& xLabel,
+											const std::string& yLabel) : PlotImpl(data, title, xLabel, yLabel)
+{
+}
+inline Plot2D::CocoaPlotImpl::~CocoaPlotImpl()
+{
+	// Remove event bindings
+	[[NSNotificationCenter defaultCenter] removeObserver:resizeObserver];
+	[[NSNotificationCenter defaultCenter] removeObserver:mouseMoveObserver];
+}
+inline void Plot2D::CocoaPlotImpl::Show()
+{
+		if (![NSApplication sharedApplication]) {
+			[NSApplication sharedApplication];
+		}
+		
+		// Create a window
+		NSRect frame = NSMakeRect(0, 0, 800, 600);
+		NSWindow *window = [[NSWindow alloc] initWithContentRect:frame
+													   styleMask:(NSWindowStyleMaskTitled |
+																   NSWindowStyleMaskClosable |
+																   NSWindowStyleMaskResizable)
+														 backing:NSBackingStoreBuffered
+														   defer:NO];
+
+		[window setTitle:@"Plot Window"];
+		[window makeKeyAndOrderFront:nil];
+		[window setAcceptsMouseMovedEvents:YES];
+		// Create and attach a delegate to handle window close
+		WindowDelegate *delegate = [[WindowDelegate alloc] init];
+		[window setDelegate:delegate];
+		
+		NSMenu *mainMenu = [[NSMenu alloc] init];
+
+		// Create "File" menu
+		NSMenuItem *fileMenuItem = [[NSMenuItem alloc] initWithTitle:@"File" action:nil keyEquivalent:@""];
+		[mainMenu addItem:fileMenuItem];
+
+		NSMenu *fileMenu = [[NSMenu alloc] initWithTitle:@"File"];
+		[fileMenuItem setSubmenu:fileMenu];
+
+		// Add "Save" option to File menu
+		NSMenuItem *saveItem = [[NSMenuItem alloc] initWithTitle:@"Save..."
+														  action:@selector(savePlot:)
+												   keyEquivalent:@"s"];
+		[saveItem setTarget:plotView]; // Ensure it calls a method in PlotView
+		[fileMenu addItem:saveItem];
+
+		// Set the main menu
+		[NSApp setMainMenu:mainMenu];
+	
+		
+		
+		// Create the PlotView instance and set it as the window's content view
+		plotView = [[PlotView alloc] initWithFrame:frame];
+		[plotView setNeedsDisplay:YES];
+		[window setContentView:plotView];
+		[plotView display];
+	
+		// Perform initial calculation for starting window size
+		std::vector<std::pair<float, float>> plotPoints = GetTransformedData(800, 600);
+		SetPlotViewData(plotPoints);
+		
+		// Subscribe to resize event
+		resizeObserver = [[NSNotificationCenter defaultCenter] addObserverForName:NSWindowDidResizeNotification
+															  object:nil
+															   queue:[NSOperationQueue mainQueue]
+														  usingBlock:^(NSNotification *note) {
+				NSWindow* window = (NSWindow*)note.object;
+				NSRect frame = window.frame;
+				this->OnResize(frame.size.width, frame.size.height);
+			}];
+		
+	mouseMoveObserver = [[NSNotificationCenter defaultCenter] addObserverForName:MouseMovedNotification
+																			  object:nil
+																			   queue:[NSOperationQueue mainQueue]
+																		  usingBlock:^(NSNotification *note) {
+			
+			
+				NSDictionary *userInfo = note.userInfo;
+				float x = [userInfo[@"x"] floatValue];
+				float y = [userInfo[@"y"] floatValue];
+				this->OnMouseMove(x, y);
+		
+		}];
+	
+		// Start the event loop
+		[NSApp run];
+		
+}
+void Plot2D::CocoaPlotImpl::OnMouseMove(int x, int y)
+{
+	CGSize size = plotView.frame.size;
+	std::pair<float, float> plotCoords = GetTransformedCoordinates(x, y, size.width, size.height);
+}
+std::pair<float, float> Plot2D::CocoaPlotImpl::GetTransformedCoordinates(const int& x,const int& y,
+																		 const int windowWidth, const int& windowHeight)
+{
+	const std::pair<float, float> plotBorderOffset = {windowWidth* PLTBORDER_OFFSET_FACTOR,
+		windowHeight * PLTBORDER_OFFSET_FACTOR};
+	if ((x >= plotBorderOffset.first && x <= windowWidth - plotBorderOffset.first) &&
+		(y >= plotBorderOffset.second && y <= windowHeight - plotBorderOffset.second))
+	{
+		// Scale absolute mouse coordinates to plot window space
+		const float xPlotSpan = windowWidth - 2 * plotBorderOffset.first;
+		const float yPlotSpan = windowHeight - 2 * plotBorderOffset.second;
+		float xScale = dataSpanX / xPlotSpan;
+		float yScale = dataSpanY / yPlotSpan;
+
+		// In Cocoa windows, (0,0) is botton left corner
+		return std::pair<float, float>((x - plotBorderOffset.first) * xScale + plotInnerOffsets.first,
+			((/*yPlotSpan - */y + plotBorderOffset.second) * yScale + plotInnerOffsets.second));
+	}
+	else
+	{
+		// Outside the plot window just default to (0,0)
+		return std::pair<float, float>(0.0f, 0.0f);
+	}
+}
+const std::vector<std::pair<float, float>> Plot2D::CocoaPlotImpl::GetTransformedData(const int windowWidth, const int windowHeight)
+{
+	const std::pair<float, float> plotBorderOffsets = {windowWidth* PLTBORDER_OFFSET_FACTOR,
+		windowHeight * PLTBORDER_OFFSET_FACTOR};
+	const float xPlotSpan = windowWidth - 2 * plotBorderOffsets.first;
+	const float yPlotSpan = windowHeight - 2 * plotBorderOffsets.second;
+	const float xScale = xPlotSpan / dataSpanX;
+	const float yScale = yPlotSpan / dataSpanY;
+
+	
+	
+//	size_t numThreads = std::thread::hardware_concurrency();
+//	size_t chunkSize = data.size() / numThreads;
+//	std::vector<std::thread> threads;
+//	for (size_t i = 0; i < numThreads; ++i) {
+//			size_t start = i * chunkSize;
+//			size_t end = (i == numThreads - 1) ? data.size() : start + chunkSize;
+//			threads.emplace_back(processChunk, std::ref(data), start, end);
+//		}
+	
+	std::vector<std::pair<float, float>> result(datasetSize);
+
+	// MacOs windows have origin at bottom left, so don't need to flip coordinates
+	std::transform(/*std::execution::par,*/ data.begin(), data.end(), result.begin(),
+				   [this, plotBorderOffsets, xScale, &yPlotSpan, yScale](const std::pair<float, float>& point) -> std::pair<float, float> {
+				return { (((point.first - plotInnerOffsets.first) * xScale) + plotBorderOffsets.first),
+					((point.second - plotInnerOffsets.second) * yScale) + plotBorderOffsets.second };
+			}
+		);
+	
+	return result;
+}
+//void Plot2D::CocoaPlotImpl::ProcessChunk(std::vector<std::pair<float, float>>& result, size_t start, size_t end, const std::pair<float, float>& plotSpan, const std::pair<float,float>& scalar)
+//{
+//	std::transform(data.begin(), data.end(), result.begin(),
+//				   [this, plotBorderOffsets, scalar, plotSpan](const std::pair<float, float>& point) -> std::pair<float, float> {
+//				return { (((point.first - plotInnerOffsets.first) * scalar.first) + plotBorderOffsets.first), plotSpan.second - ((point.second - plotInnerOffsets.second) * scalar.second) + plotBorderOffsets.second };
+//			}
+//		);
+//}
+void Plot2D::CocoaPlotImpl::OnResize(const int& newWidth, const int& newHeight)
+{
+	std::vector<std::pair<float, float>> plotPoints = GetTransformedData(newWidth, newHeight);
+	SetPlotViewData(plotPoints);
+}
+void Plot2D::CocoaPlotImpl::SetPlotViewData(const std::vector<std::pair<float, float>>& plotPoints)
+{
+	// Convert C++ vector to NSArray<NSValue *> for Objective-C
+	NSMutableArray<NSValue *> *dataArray = [NSMutableArray array];
+	for (const auto &point : plotPoints)
+	{
+		NSPoint nsPoint = NSMakePoint(point.first, point.second);
+		[dataArray addObject:[NSValue valueWithPoint:nsPoint]];
+	}
+	
+	[plotView updateData:dataArray];
+}
+
+bool Plot2D::CocoaPlotImpl::BrowseForFolder(std::string& outFolder)
+{
+	return true;
+}
+
+#endif
+#endif
+#pragma endregion
+
 	template<typename T>
 	void Plot2D::Plot(const std::vector<T>& x, const std::vector<T>& y, const std::string& title, const std::string& xLabel, const std::string& yLabel)
 	{
@@ -677,14 +1030,18 @@ namespace cxpplot {
 #ifdef _WIN32
 		PlotImpl_ = std::make_unique<Win32PlotImpl>(points, title, xLabel, yLabel);
 #elif defined(__APPLE__)
+#ifdef __OBJC__
 		PlotImpl_ = std::make_unique<CocoaPlotImpl>(points, title, xLabel, yLabel);
-#elif defined(__linux__)		
+#endif
+#elif defined(__linux__)
 		PlotImpl_ = std::make_unique<X11PlotImpl>(points, title, xLabel, yLabel);
 #else
 		std::throw(std::exception("Unknown platform."));
 #endif
 
-		PlotImpl_->InitWindow();
+		PlotImpl_->Show();
+		
+		PlotImpl_.reset();
 
 	}
 
@@ -696,3 +1053,4 @@ namespace cxpplot {
 	template void Plot2D::Plot<short>(const std::vector<short>& x, const std::vector<short>& y, const std::string& title, const std::string& xLabel, const std::string& yLabel);
 
 } // cxpplot
+
