@@ -40,7 +40,7 @@
 #include <vector>
 #include <utility>
 #include <execution>
-
+#include <thread>
 #ifdef _WIN32
 #include <windows.h>
 #include <shlobj.h>
@@ -55,6 +55,7 @@
 #import <Foundation/Foundation.h>
 #import <Cocoa/Cocoa.h>
 
+#pragma mark - ObjC
 // Need to define ObjC classes in global namespace
 @interface PlotView : NSView
 @property (nonatomic, copy) NSArray<NSValue *> *dataPoints;
@@ -90,11 +91,11 @@ extern NSString *const MouseMovedNotification = @"MouseMovedNotification";
 
 	// Create a new tracking area
 	NSTrackingArea *trackingArea = [[NSTrackingArea alloc] initWithRect:self.bounds
-																options:(NSTrackingMouseEnteredAndExited |
-																		 NSTrackingMouseMoved |
-																		 NSTrackingActiveInKeyWindow)
-																  owner:self
-															   userInfo:nil];
+														options:(NSTrackingMouseEnteredAndExited |
+																 NSTrackingMouseMoved |
+																 NSTrackingActiveInKeyWindow)
+														  owner:self
+													   userInfo:nil];
 	[self addTrackingArea:trackingArea];
 	self.trackingArea = trackingArea;
 }
@@ -127,38 +128,27 @@ extern NSString *const MouseMovedNotification = @"MouseMovedNotification";
 - (void)resetCursorRects {
 	[self addCursorRect:[self bounds] cursor:[NSCursor resizeLeftRightCursor]];
 }
-- (void)drawRect:(NSRect)dirtyRect
-{
-	[super drawRect:dirtyRect];
-	
-	[[NSColor blackColor] setFill];
-	NSRectFill(dirtyRect);  // Clear background
-	
-	// Draw mouse coordinates
+- (void)DrawMouseCoordinates {
 	if (!CGPointEqualToPoint(self.mouseCoordinates, NSZeroPoint))
 	{
-			// Format the coordinates as a string
-			NSString *coordinateText = [NSString stringWithFormat:@"X=%.2f  Y=%.2f", self.mouseCoordinates.x, self.mouseCoordinates.y];
-			
-			// Set attributes for the text
-			NSDictionary *mouseCoordAttr = @{
-				NSFontAttributeName: [NSFont systemFontOfSize:12],
-				NSForegroundColorAttributeName: [NSColor whiteColor]
-			};
-			
-			// Draw the formatted string at a top left of the window
-			NSPoint drawPoint = NSMakePoint(10, self.bounds.size.height - 20);
-			[coordinateText drawAtPoint:drawPoint withAttributes:mouseCoordAttr];
+		// Format the coordinates as a string
+		NSString *coordinateText = [NSString stringWithFormat:@"X=%.2f  Y=%.2f", self.mouseCoordinates.x, self.mouseCoordinates.y];
+		
+		// Set attributes for the text
+		NSDictionary *mouseCoordAttr = @{
+			NSFontAttributeName: [NSFont systemFontOfSize:12],
+			NSForegroundColorAttributeName: [NSColor whiteColor]
+		};
+		
+		// Draw the formatted string at a top left of the window
+		NSPoint drawPoint = NSMakePoint(10, self.bounds.size.height - 20);
+		[coordinateText drawAtPoint:drawPoint withAttributes:mouseCoordAttr];
 	}
-	
-	// Quick and dirty
-	// Skip redrawing anything else this pass if the user is just moving their mouse
-	if(self.onlyDrawCoordinates)
-	{
-		return;
-	}
-	
-	[[NSColor whiteColor] setStroke]; // Set color for the axes
+}
+
+- (void)DrawPlot {
+	// Set color for the axes
+	[[NSColor whiteColor] setStroke];
 	
 	// Init current graphics context
 	CGContextRef context = [[NSGraphicsContext currentContext] CGContext];
@@ -167,28 +157,28 @@ extern NSString *const MouseMovedNotification = @"MouseMovedNotification";
 	
 	// Draw axis labels
 	NSDictionary *axisLabelAttr = @{
-			NSFontAttributeName: [NSFont systemFontOfSize:10],
-			NSForegroundColorAttributeName: [NSColor whiteColor]
-		};
-
-		for (NSDictionary *entry in self.textEntries) {
-			NSString *text = entry[@"text"];
-			NSPoint position = [entry[@"position"] pointValue];
-
-			[text drawAtPoint:position withAttributes:axisLabelAttr];
-		}
+		NSFontAttributeName: [NSFont systemFontOfSize:10],
+		NSForegroundColorAttributeName: [NSColor whiteColor]
+	};
 	
-		// Draw axis and tick lines
-		for (NSUInteger i = 0; i < self.lines.count; i += 2) {
-			
-			NSPoint start, end;
-			[self.lines[i] getValue:&start size:sizeof(NSPoint)];
-			[self.lines[i+1] getValue:&end size:sizeof(NSPoint)];
-			
-			CGContextMoveToPoint(context, start.x, start.y);
-			CGContextAddLineToPoint(context, end.x, end.y);
-
-		}
+	for (NSDictionary *entry in self.textEntries) {
+		NSString *text = entry[@"text"];
+		NSPoint position = [entry[@"position"] pointValue];
+		
+		[text drawAtPoint:position withAttributes:axisLabelAttr];
+	}
+	
+	// Draw axis and tick lines
+	for (NSUInteger i = 0; i < self.lines.count; i += 2) {
+		
+		NSPoint start, end;
+		[self.lines[i] getValue:&start size:sizeof(NSPoint)];
+		[self.lines[i+1] getValue:&end size:sizeof(NSPoint)];
+		
+		CGContextMoveToPoint(context, start.x, start.y);
+		CGContextAddLineToPoint(context, end.x, end.y);
+		
+	}
 	// Draw all strokes at the same time. Need to call this for each color
 	CGContextStrokePath(context);
 	
@@ -205,6 +195,26 @@ extern NSString *const MouseMovedNotification = @"MouseMovedNotification";
 	
 	// Draw all plot strokes at the same time
 	CGContextStrokePath(context);
+}
+
+- (void)drawRect:(NSRect)dirtyRect
+{
+	[super drawRect:dirtyRect];
+	
+	[[NSColor blackColor] setFill];
+	NSRectFill(dirtyRect);  // Clear background
+	
+	// Draw mouse coordinates
+	[self DrawMouseCoordinates];
+	
+	// Quick and dirty
+	// Skip redrawing anything else this pass if the user is just moving their mouse
+	if(self.onlyDrawCoordinates)
+	{
+		return;
+	}
+	
+	[self DrawPlot];
 }
 
 - (void)addLineFrom:(NSPoint)start to:(NSPoint)end {
@@ -294,6 +304,8 @@ extern NSString *const MouseMovedNotification = @"MouseMovedNotification";
 }
 
 @end
+#pragma mark
+#pragma mark - End of ObjC
 #endif
 #endif
 
@@ -306,13 +318,55 @@ extern NSString *const MouseMovedNotification = @"MouseMovedNotification";
 #define PLTCOLOR_BLACK RGB(0,0,0)
 #define PLTRECT_MOUSE_DISPLAY_COORDS {0, 0, 200, 30}    // TODO: this needs to be set depending on OS
 #define PLTBORDER_OFFSET_FACTOR float(0.105)
-#define CXPPLOT_MULTITHREADING_ENABLED 0
-#define PLOT_DEFERRED_DRAW_LIMIT 5000
+#define CXP_MULTITHREADING_ENABLED 0
+#define CXP_DEFERRED_DRAW_LIMIT 5000
 
 namespace cxpplot {
+	enum EPlotColor
+	{
+		WHITE = 0,
+		BLACK = 1,
+		BLUE = 2,
+		GREEN = 3,
+		YELLOW = 4,
+		
+		DEFAULT = 999
+	};
 
 	class Plot2D {
 	public:
+		template<typename T>
+		Plot2D(const std::vector<T>& x, const std::vector<T>& y, const std::string& title = "Plot", const std::string& xLabel = "x", const std::string& yLabel = "y");
+		Plot2D(const std::string& title = "Plot", const std::string& xLabel = "x", const std::string& yLabel = "y");
+		
+		/**
+		 Show the plot with the pre-determined plot points and parameters.
+		 */
+		void Show();
+		
+		/**
+		 Sets whether the legend should be shown on the plot or not.
+		 
+		 @param show whether or not to show the legend
+		 */
+		void DisplayLegend(bool show);
+		
+		/**
+		 Sets whether or not to enable multithreading for data processing.
+		 
+		 @param enable enables multithreading if applicable
+		 */
+		void SetMultithreadingEnabled(bool enable);
+		
+		/**
+		 Sets the bottom limit for deferring window redraws until the window is idle. Decrease if resizing the window causes flickering.
+		 
+		 @param limit the number of plot points beyond which the window will deferr redrawing until it is in an idle state.
+		 */
+		void SetDeferredDrawLimit(int limit = 5000);
+		
+		template<typename T>
+		void Plot(const std::vector<T>& x, const std::vector<T>& y, const std::string& label, EPlotColor color);
 		template<typename T>
 		static void Plot(const std::vector<T>& x, const std::vector<T>& y, const std::string& title = "Plot", const std::string& xLabel = "x", const std::string& yLabel = "y");
 	protected:
@@ -324,10 +378,10 @@ namespace cxpplot {
 			virtual void Show() = 0;
 			virtual ~PlotImpl() = default;
 		protected:
-		
 			static std::string GetTimestamp();
 			virtual bool BrowseForFolder(std::string& outFolder) = 0;
-
+			virtual void OnMouseMove(const int x, const int y) = 0;
+			virtual void OnResize(const int& newWidth, const int& newHeight) = 0;
 			std::vector<std::pair<float, float>> data;
 			std::pair<float, float> mouseDisplayCoordinates;
 			std::pair<float, float> PlotZeroOffset;
@@ -340,6 +394,7 @@ namespace cxpplot {
 			const int tickLength = 4;
 			const std::pair<int, int> minWindowSize = {200,100};
 			std::pair<int, int> defaultWindowSize = {800,600};
+			int deferredResizeLimit = 5000;
 			struct Rect2D
 			{
 				
@@ -359,7 +414,7 @@ namespace cxpplot {
 				int right;
 			};
 			
-			struct range2D
+			struct Range2D
 			{
 				float smallestX;
 				float smallestY;
@@ -372,7 +427,17 @@ namespace cxpplot {
 				DRAW_MOUSE_COORIDNATES = 1,
 				DRAW_PLOT = 2
 			};
+			struct PlotProps
+			{
+				int deferredDrawLimit = 5000;
+				bool multithreadingEnabled = false;
+				int innerPlotPaddingPercent = 2;
+				int ylabelOffsetPercent = 2;
+				int xlabelOffsetPercent = 2;
+				
+			};
 			
+			PlotProps props;
 			EDrawMask drawMask = EDrawMask::DRAW_ALL;
 			
 		};
@@ -424,9 +489,9 @@ namespace cxpplot {
 			bool BrowseForFolder(std::string& outFolder) override;
 			void DrawPlot(const int &newHeight, const int &newWidth);
 			
-			void OnResize(const int& newWidth, const int& newHeight);
+			void OnResize(const int& newWidth, const int& newHeight) override;
 			const std::vector<std::pair<float, float>> GetTransformedData(const int windowWidth, const int windowHeight,  const std::pair<float, float>& plotBorderOffsets);
-			void OnMouseMove(int x, int y);
+			void OnMouseMove(int x, int y) override;
 		protected:
 			std::pair<float, float> GetTransformedCoordinates(const int& x,
 															  const int& y,
@@ -439,10 +504,10 @@ namespace cxpplot {
 			void DrawAxes(const std::pair<float, float>& plotBorderOffsets);
 			void SetPlotViewData(const std::vector<std::pair<float, float>>& plotPoints);
 			void SetPlotViewMouseCoords(const float& x, const float& y);
+			
 			PlotView* plotView;
 			id resizeObserver;
 			id mouseMoveObserver;
-			bool useDeferredResize;
 		};
 #endif
 #endif
@@ -995,7 +1060,6 @@ inline Plot2D::CocoaPlotImpl::CocoaPlotImpl(const std::vector<std::pair<float, f
 											const std::string& xLabel,
 											const std::string& yLabel) : PlotImpl(data, title, xLabel, yLabel)
 {
-	useDeferredResize = data.size() > 20000;
 }
 inline Plot2D::CocoaPlotImpl::~CocoaPlotImpl()
 {
@@ -1018,7 +1082,7 @@ inline void Plot2D::CocoaPlotImpl::Show()
 														 backing:NSBackingStoreBuffered
 														   defer:NO];
 
-		[window setTitle:@"Plot Window"];
+		[window setTitle:[NSString stringWithUTF8String:title.c_str()]];
 		[window makeKeyAndOrderFront:nil];
 		[window setAcceptsMouseMovedEvents:YES];
 		// Create and attach a delegate to handle window close
@@ -1056,13 +1120,12 @@ inline void Plot2D::CocoaPlotImpl::Show()
 	std::vector<std::pair<float, float>> plotPoints = GetTransformedData(defaultWindowSize.first,
 																		 defaultWindowSize.second,
 																		 plotBorderOffset);
-		SetPlotViewData(plotPoints);
+	SetPlotViewData(plotPoints);
 		
-		// Draw axes
 	DrawAxes(plotBorderOffset);
 	
-		// Subscribe to resize event
-	if(!useDeferredResize)
+	// Subscribe to resize event if limit is high enough
+	if(datasetSize < deferredResizeLimit)
 	{
 		resizeObserver = [[NSNotificationCenter defaultCenter] addObserverForName:NSWindowDidResizeNotification
 																		   object:nil
@@ -1084,6 +1147,7 @@ inline void Plot2D::CocoaPlotImpl::Show()
 			this->OnResize(size.width, size.height);
 		}];
 	}
+	
 		// Subscribe to mouse events
 		mouseMoveObserver = [[NSNotificationCenter defaultCenter] addObserverForName:MouseMovedNotification
 																			  object:nil
@@ -1211,16 +1275,20 @@ bool Plot2D::CocoaPlotImpl::BrowseForFolder(std::string& outFolder)
 	return true;
 }
 
-void Plot2D::CocoaPlotImpl::DrawTextAtPosition(int x, int y, const std::string &text) { 
-	
+void Plot2D::CocoaPlotImpl::DrawTextAtPosition(int x, int y, const std::string &text)
+{
+	[plotView addText:[NSString stringWithUTF8String:text.c_str()]
+		   atPosition:NSMakePoint(x, y)];
 }
 
-void Plot2D::CocoaPlotImpl::DrawVerticalTextAtPosition(int x, int y, const std::string &text) {
+void Plot2D::CocoaPlotImpl::DrawVerticalTextAtPosition(int x, int y, const std::string &text)
+{
 	
 }
 
 void Plot2D::CocoaPlotImpl::DrawVerticalTick(const int tickCenterX, const int tickCenterY,
-											 const float tickValue, const int tickLength) {
+											 const float tickValue, const int tickLength)
+{
 	
 	// Draw line
 	[plotView addLineFrom:NSMakePoint(tickCenterX, tickCenterY - tickLength)
@@ -1270,7 +1338,8 @@ void Plot2D::CocoaPlotImpl::DrawAxes(const std::pair<float, float> &plotBorderOf
 	[plotView addLineFrom:NSMakePoint(leftBorderPos, bottomBorderPos) to:NSMakePoint(rightBorderPos, bottomBorderPos)];
 
 	// Draw labels
-	//DrawTextAtPosition(windowRect.right / 2, 20, xLabel);
+	// TODO: use plot props
+	DrawTextAtPosition(windowRect.right / 2, 20, xLabel);
 	//DrawVerticalTextAtPosition(windowRect.left + 10, windowRect.top / 2, yLabel);
 	
 	// Draw X-axis ticks
