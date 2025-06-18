@@ -23,6 +23,8 @@
 # Ignore user-specific files
 *.user
 *.sln.docstates
+.DS_Store
+
 
 # Ignore Visual Studio cache files
 .vs/
