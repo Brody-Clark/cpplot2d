@@ -2,7 +2,7 @@
 
 > [!IMPORTANT]
 > **Project Status: In Progress**
-> __This project is actively being developed. Some features are incomplete or experimental.__
+> _This project is actively being developed. Some features are incomplete or experimental._
 
 ## About
 
