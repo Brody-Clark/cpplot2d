@@ -1,5 +1,9 @@
 # cxpplot
 
+> [!IMPORTANT]
+> **Project Status: In Progress**
+> Some features are still in progress or experimental and may not work as intended.
+
 ## About
 
 This is a cross-platform, header-only 2-D plotting library for C++ meant to provide basic line plotting for quick visualization of real-number datasets. It is intended to be simple to use and is designed to work without needing any third party libraries or tools installed. It also includes a save feature to save plots as .png files.
@@ -33,11 +37,11 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine,
     std::vector<float> y;
 
     // Call plot function with default labels ('x', 'y') and default tile ('Plot')
-    rnplot32::Plot2D plot(x, y);
+    cxpplot::Plot2D plot(x, y);
     plot.Show();
 
     // Call plot function with custom axis labels and title
-    rnplot32::Plot2D plot(x, y, "distance", "time", "Distance vs Time");
+    cxpplot::Plot2D plot(x, y, "distance", "time", "Distance vs Time");
     plot.Show();
 }
 
@@ -49,18 +53,18 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine,
 
 #include "cxpplot.h"
 
-int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine, int CmdShow)
+int main(int argc, const char * argv[])
 {
     // Create dataset as 2-D vector of any numeric type
     std::vector<float> x;
     std::vector<float> y;
 
     // Call plot function with default labels ('x', 'y') and default tile ('Plot')
-    rnplot32::Plot2D plot(x, y);
+    cxpplot::Plot2D plot(x, y);
     plot.Show();
 
     // Call plot function with custom axis labels and title
-    rnplot32::Plot2D plot(x, y, "distance", "time", "Distance vs Time");
+    cxpplot::Plot2D plot(x, y, "distance", "time", "Distance vs Time");
     plot.Show();
 }
 
@@ -69,24 +73,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine,
 ### Linux
 
 ```cpp
-
-#include "cxpplot.h"
-
-int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine, int CmdShow)
-{
-    // Create dataset as 2-D vector of any numeric type
-    std::vector<float> x;
-    std::vector<float> y;
-
-    // Call plot function with default labels ('x', 'y') and default tile ('Plot')
-    rnplot32::Plot2D plot(x, y);
-    plot.Show();
-
-    // Call plot function with custom axis labels and title
-    rnplot32::Plot2D plot(x, y, "distance", "time", "Distance vs Time");
-    plot.Show();
-}
-
+TODO
 ```
 
 **Sample plot:**
