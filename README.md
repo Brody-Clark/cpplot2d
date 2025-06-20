@@ -6,7 +6,12 @@
 
 ## About
 
-This is a cross-platform, header-only 2-D plotting library for C++ meant to provide basic line plotting for quick visualization of real-number datasets. It is intended to be simple to use and is designed to work without needing any third party libraries or tools installed. It also includes a save feature to save plots as .png files.
+**cxpplot** is a cross-platform, header-only 2D plotting library for C++. It enables quick visualization of real-valued datasets through basic line plots. The library is:
+
+- Simple to use
+- Self-contained (no external dependencies)
+- Capable of displaying plots or saving them as `.png` images
+- Responsive even with large datasets
 
 ## Requirements
 
@@ -15,12 +20,21 @@ This is a cross-platform, header-only 2-D plotting library for C++ meant to prov
 
 ## Usage
 
-1. **Include the cxpplot header found in `src/`**
+1. Copy the header file from `include/cxpplot.h` and include it in your project:
+```cpp
+#include "cxpplot/cxpplot.h"
+```
 
-2. **For Windows: Use the `WinMain` function as the entry point for your application and Build your project with the Windows subsystem:**
+2. Build Instructions by Platform:
+
+- **Windows**
+    - Use the `WinMain` function as the entry point for your application and Build your project with the Windows subsystem
     - In your project settings, set the **Linker System** to **Windows**.
-3. **For Apple: TODO**
-4. **For Linux: TODO**
+- **macOS**
+    - Use the standard `main()` entry point
+    - Requires Objective-C++ (.mm files)
+- **Linux**
+    - ⚠️ X11-based support is in progress ⚠️
 
 ## Examples
 
@@ -72,13 +86,37 @@ int main(int argc, const char * argv[])
 
 ### Linux
 
-```cpp
-TODO
-```
+⚠️ WIP ⚠️
 
 **Sample plot:**
 
 !["Demo Screenshot"](docs/PlotDemo.png)
+
+## Contributing
+
+Contributions are welcome! Please follow these steps when contributing:
+
+### Code Style
+
+This project uses clang-format for consistent code style.
+
+- Ensure code is formatted before submitting a pull request
+- The formatting configuration is defined in the .clang-format file in the repo root
+
+To format your code automatically:
+```sh
+clang-format -i path/to/file.cpp
+```
+
+To format all .h and .cpp files:
+
+```sh
+find . -regex '.*\.\(cpp\|h\)' -exec clang-format -i {} +
+```
+
+### Testing
+
+Unit tests are located in the tests/ directory. (WIP — contributions welcome.)
 
 ## License
 
