@@ -14,6 +14,15 @@
 *.ilk
 *.cache
 
+# Build artifacts
+/build/
+CMakeFiles/
+CMakeCache.txt
+*.o
+*.log
+*.vcxproj*
+/.vs/
+
 # Ignore temporary files
 *.tmp
 *.bak
