@@ -2,6 +2,7 @@
 
 > [!IMPORTANT]
 > **Project Status: In Progress**
+> <br>
 > _This project is actively being developed. Some features are incomplete or experimental._
 
 ## About
@@ -50,7 +51,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine,
     std::vector<float> x;
     std::vector<float> y;
 
-    // Call plot function with default labels ('x', 'y') and default tile ('Plot')
+    // Call plot function with default labels ('x', 'y') and default title ('Plot')
     cxpplot::Plot2D plot(x, y);
     plot.Show();
 
@@ -73,7 +74,7 @@ int main(int argc, const char * argv[])
     std::vector<float> x;
     std::vector<float> y;
 
-    // Call plot function with default labels ('x', 'y') and default tile ('Plot')
+    // Call plot function with default labels ('x', 'y') and default title ('Plot')
     cxpplot::Plot2D plot(x, y);
     plot.Show();
 
@@ -86,7 +87,7 @@ int main(int argc, const char * argv[])
 
 ### Linux
 
-⚠️ WIP ⚠️
+⚠️ In Progress ⚠️
 
 **Sample plot:**
 
@@ -101,7 +102,7 @@ Contributions are welcome! Please follow these steps when contributing:
 This project uses clang-format for consistent code style.
 
 - Ensure code is formatted before submitting a pull request
-- The formatting configuration is defined in the .clang-format file in the repo root
+- The formatting configuration is defined in the `.clang-format` file in the repo root
 
 To format your code automatically:
 ```sh
