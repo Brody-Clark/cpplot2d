@@ -105,14 +105,15 @@ This project uses clang-format for consistent code style.
 - The formatting configuration is defined in the `.clang-format` file in the repo root
 
 To format your code automatically:
+
 ```sh
 clang-format -i path/to/file.cpp
 ```
 
-To format all .h and .cpp files:
+A handy git alias to format all staged files with a simple "format" command:
 
 ```sh
-clang-format -i -- **.cpp **.h
+alias format="git diff --cached --name-only --diff-filter=ACMRTUXB | grep -E '\.(cpp|cc|c|h|hpp)$' | xargs clang-format -i"
 ```
 
 ### Testing
