@@ -1348,7 +1348,7 @@ void Plot2D::CocoaPlotImpl::SetPlotViewData(const std::vector<std::pair<float, f
 
 bool Plot2D::CocoaPlotImpl::BrowseForFolder(std::string& outFolder)
 {
-	// TODO: Implement
+    // TODO: Implement
     return true;
 }
 
@@ -1387,7 +1387,7 @@ void Plot2D::CocoaPlotImpl::DrawHorizontalTick(const int tickCenterX, const int 
 
     NSDictionary* attributes = @{NSFontAttributeName : [NSFont systemFontOfSize:10]};
     NSString* text = [NSString stringWithUTF8String:label.str().c_str()];
-	
+
     // Get the text size
     NSSize textSize = [text sizeWithAttributes:attributes];
     CGFloat textWidth = textSize.width;
@@ -1416,7 +1416,7 @@ void Plot2D::CocoaPlotImpl::DrawAxes(const std::pair<float, float>& plotBorderOf
     // Draw labels
     // TODO: use plot props
     DrawTextAtPosition(windowRect.right / 2, 20, xLabel);
-	DrawTextAtPosition(leftBorderPos / 4, windowRect.top / 2, yLabel);
+    DrawTextAtPosition(leftBorderPos / 4, windowRect.top / 2, yLabel);
 
     // Draw X-axis ticks
     int numTicksX = 4;
@@ -1494,5 +1494,4 @@ template void Plot2D::Plot<long>(const std::vector<long>& x, const std::vector<l
 template void Plot2D::Plot<short>(const std::vector<short>& x, const std::vector<short>& y,
                                   const std::string& title, const std::string& xLabel,
                                   const std::string& yLabel);
-
 }  // namespace cxpplot

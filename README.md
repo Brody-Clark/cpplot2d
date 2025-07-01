@@ -112,7 +112,7 @@ clang-format -i path/to/file.cpp
 To format all .h and .cpp files:
 
 ```sh
-find . -regex '.*\.\(cpp\|h\)' -exec clang-format -i {} +
+clang-format -i -- **.cpp **.h
 ```
 
 ### Testing
