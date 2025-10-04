@@ -334,7 +334,7 @@ extern NSString* const MouseMovedNotification = @"MouseMovedNotification";
 #define CXP_MULTITHREADING_ENABLED 0
 #define CXP_DEFERRED_DRAW_LIMIT 5000
 
-namespace cxpplot
+namespace cpplot2d
 {
 enum EPlotColor
 {
@@ -489,9 +489,9 @@ class Plot2D
        protected:
         bool isResizing;
         bool isMouseMoving;
-        void InitGDIPlus(Gdiplus::GdiplusStartupInput& gdiplusStartupInput,
-                         ULONG_PTR& gdiplusToken);
-        void ShutdownGDIPlus(ULONG_PTR gdiplusToken);
+        ULONG_PTR gdiplusToken;
+        void InitGDIPlus(Gdiplus::GdiplusStartupInput& gdiplusStartupInput);
+        void ShutdownGDIPlus();
         HBITMAP CaptureWindowContent(HWND hwnd);
         HWND CreatePlotWindow(HINSTANCE hInstance, const std::string& title);
         void DrawTextAtPosition(HDC hdc, int x, int y, const std::string& text);
@@ -607,7 +607,7 @@ inline std::string Plot2D::PlotImpl::GetTimestamp()
 
     std::tm local_time;
 #if defined(_WIN32)
-    localtime_s(&timeinfo, &now_time);
+    localtime_s(&local_time, &now_time);
 #else
     localtime_r(&now_time, &local_time);
 #endif
@@ -627,11 +627,11 @@ inline Plot2D::Win32PlotImpl::Win32PlotImpl(const std::vector<std::pair<float, f
 {
     Gdiplus::GdiplusStartupInput gdiplusStartupInput;
     ULONG_PTR gdiplusToken;
-    InitGDIPlus(gdiplusStartupInput, gdiplusToken);
+    InitGDIPlus(gdiplusStartupInput);
 }
-inline Plot2D::Win32PlotImpl : ~Win32PlotImpl()
+inline Plot2D::Win32PlotImpl::~Win32PlotImpl()
 {
-    ShutdownGDIPlus(gdiplusToken);
+    ShutdownGDIPlus();
 }
 void Plot2D::Win32PlotImpl::Show()
 {
@@ -653,13 +653,12 @@ void Plot2D::Win32PlotImpl::Show()
 
     // ShutdownGDIPlus(gdiplusToken);
 }
-void Plot2D::Win32PlotImpl::InitGDIPlus(Gdiplus::GdiplusStartupInput& gdiplusStartupInput,
-                                        ULONG_PTR& gdiplusToken)
+void Plot2D::Win32PlotImpl::InitGDIPlus(Gdiplus::GdiplusStartupInput& gdiplusStartupInput)
 {
     Gdiplus::GdiplusStartup(&gdiplusToken, &gdiplusStartupInput, NULL);
 }
 
-void Plot2D::Win32PlotImpl::ShutdownGDIPlus(ULONG_PTR gdiplusToken)
+void Plot2D::Win32PlotImpl::ShutdownGDIPlus()
 {
     Gdiplus::GdiplusShutdown(gdiplusToken);
 }
@@ -693,7 +692,7 @@ void Plot2D::Win32PlotImpl::DrawPoints(HDC hdc, RECT rect,
 {
     const float xPlotSpan = rect.right - 2 * plotBorderOffsets.first;
     const float yPlotSpan = rect.bottom - 2 * plotBorderOffsets.second;
-    const float xScale = xPlotSpan / (dataSpanX);
+    const float xScale = xPlotSpan / dataSpanX;
     const float yScale = yPlotSpan / dataSpanY;
 
     std::pair<float, float> point;
@@ -946,7 +945,7 @@ inline LRESULT Plot2D::Win32PlotImpl::HandleMessage(HWND hwnd, UINT uMsg, WPARAM
     {
         case WM_PAINT:
         {
-            if (datasetSize > PLOT_CONTINUOUS_DRAW_LIMIT && isResizing)
+            if (datasetSize > props.deferredDrawLimit && isResizing)
             {
                 // Dont paint while resizing for large datasets to reduce lag
                 return 0;
@@ -978,7 +977,7 @@ inline LRESULT Plot2D::Win32PlotImpl::HandleMessage(HWND hwnd, UINT uMsg, WPARAM
             return 0;
         }
         case WM_SIZE:
-            if (datasetSize < PLOT_CONTINUOUS_DRAW_LIMIT)
+            if (datasetSize < props.deferredDrawLimit)
             {
                 // Allow continuous redraw
                 InvalidateRect(hwnd, NULL, TRUE);
