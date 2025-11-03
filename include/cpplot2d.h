@@ -1,27 +1,4 @@
-// MIT License with Attribution Clause
-// Copyright (c) 2025 Brody Clark
-//
-// Permission is hereby granted, free of charge, to any person obtaining a copy
-// of this software and associated documentation files (the "Software"), to deal
-// in the Software without restriction, including without limitation the rights
-// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-// copies of the Software, subject to the following conditions:
-//
-// 1. Attribution Requirement
-//    Any use of this Software, including in original or modified form, must include
-//    proper attribution to the original author(s) in the documentation, README, or
-//    other relevant written materials.
-//
-// 2. Derivative Works
-//    Any modified or derivative works of this Software must include a prominent notice
-//    stating that the work is derived from this Software and must also comply with
-//    the attribution requirements above.
-//
-// 3. Preservation of License
-//    This license notice, including the attribution requirement, must be included in
-//    all copies or substantial portions of the Software.
-//
-// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND...
+#pragma once
 
 #pragma once
 #include <algorithm>
@@ -36,11 +13,14 @@
 #include <iomanip>
 #include <limits>
 #include <sstream>
+#include <map>
 #include <string>
 #include <thread>
 #include <type_traits>
 #include <utility>
+#include <functional>
 #include <vector>
+#include <iostream>
 #ifdef _WIN32
 #include <windows.h>
 #include <commdlg.h>
@@ -295,7 +275,7 @@ extern NSString* const MouseMovedNotification = @"MouseMovedNotification";
         NSBitmapImageRep* imageRep = [self bitmapImageRepForCachingDisplayInRect:self.bounds];
         [self cacheDisplayInRect:self.bounds toBitmapImageRep:imageRep];
 
-        // Convert to PNG data
+        // Convert to PNG m_data
         NSData* pngData =
             [imageRep representationUsingType:NSBitmapImageFileTypePNG properties:@{}];
 
@@ -322,44 +302,75 @@ extern NSString* const MouseMovedNotification = @"MouseMovedNotification";
 #endif
 #endif
 
-#define PLTMENU_SAVE 1
-
-#define PLTCOLOR_RED RGB(255, 0, 0)
-#define PLTCOLOR_YELLOW RGB(255, 255, 0)
-#define PLTCOLOR_GREEN RGB(0, 255, 0)
-#define PLTCOLOR_WHITE RGB(255, 255, 255)
-#define PLTCOLOR_BLACK RGB(0, 0, 0)
-#define PLTRECT_MOUSE_DISPLAY_COORDS {0, 0, 200, 30}  // TODO: this needs to be set depending on OS
-#define PLTBORDER_OFFSET_FACTOR float(0.105)
-#define CXP_MULTITHREADING_ENABLED 0
-#define CXP_DEFERRED_DRAW_LIMIT 5000
-
 namespace cpplot2d
 {
-enum EPlotColor
+
+struct Color
 {
-    WHITE = 0,
-    BLACK = 1,
-    BLUE = 2,
-    GREEN = 3,
-    YELLOW = 4,
+    uint8_t r = 0.f;
+    uint8_t g = 0.f;
+    uint8_t b = 0.f;
+    uint8_t a = 1.f;  // alpha, default opaque
 
-    DEFAULT = 999
+    constexpr Color() = default;
+    constexpr Color(uint8_t red, uint8_t green, uint8_t blue, uint8_t alpha = 1)
+        : r(red), g(green), b(blue), a(alpha)
+    {
+    }
+
+    // Common predefined colors
+    static constexpr Color Black()
+    {
+        return {0, 0, 0};
+    }
+    static constexpr Color White()
+    {
+        return {255, 255, 255};
+    }
+    static constexpr Color Red()
+    {
+        return {255, 0, 0};
+    }
+    static constexpr Color Green()
+    {
+        return {0, 255, 0};
+    }
+    static constexpr Color Blue()
+    {
+        return {0, 0, 255};
+    }
+
+    static constexpr Color FromRGB(int red, int green, int blue, int alpha = 255)
+    {
+        return {static_cast<uint8_t>(red), static_cast<uint8_t>(green), static_cast<uint8_t>(blue),
+                static_cast<uint8_t>(alpha)};
+    }
+
+    constexpr bool operator<(const Color& other) const noexcept
+    {
+        if (r != other.r) return r < other.r;
+        if (g != other.g) return g < other.g;
+        if (b != other.b) return b < other.b;
+        return a < other.a;
+    }
+
+    constexpr bool operator==(const Color& other) const noexcept
+    {
+        return r == other.r && g == other.g && b == other.b && a == other.a;
+    }
 };
-
 class Plot2D
 {
    public:
     template <typename T>
     Plot2D(const std::vector<T>& x, const std::vector<T>& y, const std::string& title = "Plot",
            const std::string& xLabel = "x", const std::string& yLabel = "y");
-    Plot2D(const std::string& title = "Plot", const std::string& xLabel = "x",
-           const std::string& yLabel = "y");
 
     /**
      Show the plot with the pre-determined plot points and parameters.
+     Set block to false to prevent blocking the main thread (e.g. when created from within another gui app).
      */
-    void Show();
+    void Show(bool block = true);
 
     /**
      Sets whether the legend should be shown on the plot or not.
@@ -369,487 +380,580 @@ class Plot2D
     void DisplayLegend(bool show);
 
     /**
-     Sets whether or not to enable multithreading for data processing.
+     Sets whether or not to enable multithreading for m_data processing.
 
      @param enable enables multithreading if applicable
      */
     void SetMultithreadingEnabled(bool enable);
 
     /**
-     Sets the bottom limit for deferring window redraws until the window is idle. Decrease if
-     resizing the window causes flickering.
+     Sets the bottom limit for deferring window redraws until the window is idle. Decrease this
+     value if resizing the window causes flickering.
 
      @param limit the number of plot points beyond which the window will deferr redrawing until it
      is in an idle state.
      */
     void SetDeferredDrawLimit(int limit = 5000);
 
-    template <typename T>
-    void Plot(const std::vector<T>& x, const std::vector<T>& y, const std::string& label,
-              EPlotColor color);
-    template <typename T>
-    static void Plot(const std::vector<T>& x, const std::vector<T>& y,
-                     const std::string& title = "Plot", const std::string& xLabel = "x",
-                     const std::string& yLabel = "y");
-
    protected:
-    class PlotImpl
+    using Point = std::pair<int, int>;
+
+    struct WindowRect
     {
        public:
-        PlotImpl(const std::vector<std::pair<float, float>>& data, const std::string& title,
-                 const std::string& xLabel, const std::string& yLabel);
-        virtual void Show() = 0;
-        virtual ~PlotImpl() = default;
+        WindowRect(int top, int left, int right, int bottom)
+            : top(top), bottom(bottom), right(right), left(left)
+        {
+        }
+
+        std::pair<int, int> Size()
+        {
+            return {right - left, top - bottom};
+        }
+
+        int top;
+        int left;
+        int right;
+        int bottom;
+    };
+
+    enum class Orientation : uint8_t
+    {
+        HORIZONTAL = 0,
+        VERTICAL = 1
+    };
+
+    class IDGenerator
+    {
+       public:
+        static int Next()
+        {
+            static int current = 1000;
+            return current++;
+        }
+    };
+
+    class FileName
+    {
+       public:
+        static std::string Create(const std::string& dir, const std::string& filename);
+    };
+
+    struct GuiPoints
+    {
+        Point p;
+        int size;
+    };
+
+    // TODO: Can make this a Ployline that has a vector<points>
+    // that way we dont copy the color a million times for the same set of lines
+    struct GuiPolyline
+    {
+       public:
+        GuiPolyline(std::vector<Point> points, Color c, int thickness = 1)
+            : points(points), color(c), thickness(thickness)
+        {
+        }
+        std::vector<Point> points;
+        Color color;
+        int thickness;
+    };
+    struct GuiLine
+    {
+       public:
+        GuiLine(Point p1, Point p2, Color c) : p1(p1), p2(p2), color(c)
+        {
+        }
+        Point p1, p2;
+        Color color;
+    };
+    struct GuiText
+    {
+       public:
+        GuiText(const std::string& text, const Point pos, int spacing, const Color& color,
+                Orientation orientation)
+            : text(text), pos(pos), spacing(spacing), color(color), orientation(orientation)
+        {
+        }
+        GuiText() = default;
+        std::string text = "";
+        Point pos = {0,0};
+        int spacing = 1;
+        Color color = Color::White();
+        Orientation orientation = Orientation::HORIZONTAL;
+    };
+    struct GuiRect
+    {
+        Point topLeft;
+        Point bottomRight;
+        Color fillColor;
+        Color borderColor;
+        int borderWidth;
+    };
+
+    struct GuiCircle
+    {
+        Point center;
+        int radius;
+        Color fillColor;
+        Color borderColor;
+        int borderWidth;
+    };
+
+    struct GuiPolygon
+    {
+        std::vector<Point> vertices;
+        Color fillColor;
+        Color borderColor;
+        int borderWidth;
+    };
+
+    struct WindowState
+    {
+        std::vector<GuiText> text;
+        std::vector<GuiLine> lines;
+        std::vector<GuiPolyline> polylines;
+        std::vector<GuiPoints> points;
+        std::vector<GuiRect> rects;
+        std::vector<GuiCircle> circles;
+        std::vector<GuiPolygon> polygons;
+        Color background;
+        std::pair<int, int> minSize;
+    };
+
+    class IWindow
+    {
+       public:
+
+        // Draws text at given x and y position in window space. Returns id to that text
+        virtual void DrawTextAt(const std::string text, int spacing, int size = 1,
+                                Point startPos = {0, 0},
+                                Orientation orientation = Orientation::HORIZONTAL,
+                                Color color = Color::White()) = 0;
+
+        // Invalidates entire window, forcing a redraw
+        virtual void Invalidate(const WindowState& windowState) = 0;
+        virtual int GetAverageCharWidth() = 0;
+        virtual void DrawWindowState() = 0;
+
+        // Invalidates only the space  encompassed in the given rect
+        virtual void InvalidateRegion(const WindowRect& rect, const WindowState& windowState) = 0;
+        virtual void AddMenuButton(const std::string menu, const std::string label,
+                                   std::function<void()> onClickCallback) = 0;
+        virtual bool SaveScreenshotAsPNG(const std::string& fileName) = 0;
+        virtual void SetIsVisible(bool isVisible) = 0;
+        virtual std::string GetTimestamp() = 0;
+        virtual WindowRect GetRect() = 0;
+        virtual void RunEventLoop() = 0;
+        std::function<void(Point)> OnMouseHoverCallback;
+        std::function<void()> OnResizeStartCallback;
+        std::function<void()> OnResizeEndCallback;
+        std::function<void()> OnResizeCallback;
+    };
+    class IGraphicsContext
+    {
+       public:
+        virtual void Init() = 0;
+        virtual void Shutdown() = 0;
+        virtual std::unique_ptr<Plot2D::IWindow> MakeWindow(Color background,
+                                                            std::pair<int, int> defaultSize,
+                                                            std::pair<int, int> minSize,
+                                                            bool isVisible,
+                                                            const std::string& title) = 0;
 
        protected:
-        static std::string GetTimestamp();
-        virtual bool BrowseForFolder(std::string& outFolder) = 0;
-        virtual void OnMouseMove(const int x, const int y) = 0;
-        virtual void OnResize(const int& newWidth, const int& newHeight) = 0;
-        std::vector<std::pair<float, float>> data;
-        std::pair<float, float> mouseDisplayCoordinates;
-        std::pair<float, float> PlotZeroOffset;
-        std::string xLabel;
-        std::string yLabel;
-        std::string title;
-        float dataSpanX = 0;
-        float dataSpanY = 0;
-        size_t datasetSize = 0;
-        const int tickLength = 4;
-        const std::pair<int, int> minWindowSize = {200, 100};
-        std::pair<int, int> defaultWindowSize = {800, 600};
-        int deferredResizeLimit = 5000;
-        struct Rect2D
-        {
-           public:
-            Rect2D(const int top, const int bottom, const int left, const int right)
-                : top(top), bottom(bottom), left(left), right(right)
-            {
-            }
-
-            Rect2D(const float top, const float bottom, const float left, const float right)
-                : top(static_cast<int>(top)),
-                  bottom(static_cast<int>(bottom)),
-                  left(static_cast<int>(left)),
-                  right(static_cast<int>(right))
-            {
-            }
-
-            int top;
-            int bottom;
-            int left;
-            int right;
-        };
-
-        struct Range2D
-        {
-            float smallestX;
-            float smallestY;
-            float largestX;
-            float largestY;
-        };
-        enum EDrawMask
-        {
-            DRAW_ALL = 0,
-            DRAW_MOUSE_COORIDNATES = 1,
-            DRAW_PLOT = 2
-        };
-        struct PlotProps
-        {
-            int deferredDrawLimit = 5000;
-            bool multithreadingEnabled = false;
-            int innerPlotPaddingPercent = 2;
-            int ylabelOffsetPercent = 2;
-            int xlabelOffsetPercent = 2;
-        };
-
-        PlotProps props;
-        EDrawMask drawMask = EDrawMask::DRAW_ALL;
+        ULONG_PTR m_gdiplusToken;
     };
+
+    // TODO: USE
+    struct PlotProperties
+    {
+        Color backgroundColor;
+        Color borderColor;
+        bool showLegend;
+        int tickLineCount;
+        int labelTextSpacing;
+        std::string plotTitle;
+        std::string plotXLabel;
+        std::string plotYLabel;
+    };
+
+    static std::unique_ptr<IGraphicsContext> m_graphicsContext;
+    std::unique_ptr<IWindow> m_window;
+    void OnMouseHoverCallback(IWindow& window, Point mousePos);
+    void OnWindowResizeCallback(IWindow& window);
+    void OnSaveButtonClicked(IWindow& window);
+    void OnWindowResizeEndCallback(IWindow& window);
+    std::pair<float, float> GetPlotBorderOffsets();
+    void SetPlotBorderOffsets(std::pair<float, float> offsets);
+    std::pair<float, float> Plot2D::GetTransformedCoordinates(const int& x, const int& y,
+                                                              const int windowWidth,
+                                                              const int& windowHeight);
+    void UpdatePlotWindowState(WindowState& windowState, IWindow& window);
+    // Returns data points as polyline based on window sizes
+    // TOOD: account for zoom here?
+    GuiPolyline GetDataPolyline(const std::vector<std::pair<float, float>>& data, Color color,
+                                IWindow& window);
+
+    // Returns plot border as polyline
+    GuiPolyline GetPlotBorderPolyline(IWindow& window, Color color);
+    std::pair<std::vector<GuiLine>, std::vector<GuiText>> GetPlotBorderTickLines(IWindow& window,
+                                                                                 Color color);
+    std::vector<GuiText> GetPlotLabels(IWindow& window, Color color);
+
+    std::pair<float, float> AbsToPlot(IWindow& window, const int x, const int y,
+                                      const std::pair<float, float>& plotBorderOffset);
+
+    std::vector<std::pair<float, float>> m_data;
+    std::pair<float, float> PlotZeroOffset;
+    std::pair<float, float> m_plotBorderOffsets;
+    const float m_plotBorderOffsetFactor = 0.105;
+    std::string xLabel;
+    std::string yLabel;
+    std::string title;
+    float dataSpanX = 0;
+    float dataSpanY = 0;
+    size_t datasetSize = 0;
+    const int tickLength = 4;
+    const std::pair<int, int> minWindowSize = {200, 100};
+    std::pair<int, int> defaultWindowSize = {800, 600};
+    int m_deferredResizeLimit = 1000000;
+    int m_mouseCoordTextId;
+    WindowState m_plotWindowState;
 
 #ifdef _WIN32
-    class Win32PlotImpl : public PlotImpl
+    class Win32GraphicsContext : public Plot2D::IGraphicsContext
     {
        public:
-        Win32PlotImpl(const std::vector<std::pair<float, float>>& data, const std::string& title,
-                      const std::string& xLabel, const std::string& yLabel);
-        ~Win32PlotImpl() override;
-        void Show() override;
+        void Init() override;
+        void Shutdown() override;
+        virtual std::unique_ptr<Plot2D::IWindow> MakeWindow(Color background,
+                                                            std::pair<int, int> defaultSize,
+                                                            std::pair<int, int> minSize,
+                                                            bool isVisible,
+                                                            const std::string& title) override;
+    };
+    class Win32Window : public Plot2D::IWindow
+    {
+       public:
+        Win32Window(std::pair<int, int> defaultWindowSize, std::pair<int, int> pos,
+                    std::string title);
 
-        virtual bool BrowseForFolder(std::string& outFolder) override;
-
-        void DrawPlot(HDC hdc, RECT rect, const std::vector<std::pair<float, float>>& data,
-                      const std::pair<float, float>& plotBorderOffsets);
-        void DrawPoints(HDC hdc, RECT rect, const std::vector<std::pair<float, float>>& data,
-                        const size_t& size, const std::pair<float, float>& plotBorderOffsets);
-        LRESULT HandleMessage(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
-
-        std::string GetFileName(const std::string& directory);
-
-       protected:
-        bool isResizing;
-        bool isMouseMoving;
-        ULONG_PTR gdiplusToken;
-        void InitGDIPlus(Gdiplus::GdiplusStartupInput& gdiplusStartupInput);
-        void ShutdownGDIPlus();
-        HBITMAP CaptureWindowContent(HWND hwnd);
-        HWND CreatePlotWindow(HINSTANCE hInstance, const std::string& title);
-        void DrawTextAtPosition(HDC hdc, int x, int y, const std::string& text);
-        void DrawVerticalTextAtPosition(HDC hdc, int x, int y, const std::string& text);
-        void DrawVerticalTick(HDC hdc, RECT rect, const int tickCenterX, const int tickCenterY,
-                              const float tickValue, const int tickLength);
-        void DrawHorizontalTick(HDC hdc, RECT rect, const int tickCenterX, const int tickCenterY,
-                                const float tickValue, const int tickLength);
-        void DrawAxes(HDC hdc, RECT rect, const std::pair<float, float>& plotBorderOffsets);
-        void DrawCoordinates(HDC hdc, RECT rect, const std::pair<float, float>& coordinates);
-        void SaveHBITMAPToFile(HBITMAP hBitmap, const std::string& filename);
-        std::string wcharToString(const wchar_t* wcharStr);
-        std::pair<float, float> GetMouseCoordinatesInDataSpace(
-            RECT rect, const int x, const int y, const std::pair<float, float>& plotBorderOffsets);
-
+        void DrawTextAt(const std::string text, int spacing, int size = 1, Point startPos = {0,0},
+                        Orientation orientation = Orientation::HORIZONTAL, Color color = Color::White()) override;
+        int GetAverageCharWidth() override;
+        void AddMenuButton(const std::string menu, const std::string label,
+                           std::function<void()> onClickCallback) override;
+        void SetIsVisible(bool isVisible) override;
+        void Invalidate(const WindowState& windowState) override;
+        void DrawWindowState() override;
+        std::string GetTimestamp() override;
+        void RunEventLoop() override;
+        void InvalidateRegion(const WindowRect& rect, const WindowState& windowState) override;
+        // LRESULT HandleMessage(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
+        bool BrowseForFolder(std::string& outFolder);
+        WindowRect GetRect() override;
+        bool SaveScreenshotAsPNG(const std::string& fileName) override;
         static LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
-    };
-#endif
-#ifdef __APPLE__
-#ifdef __OBJC__
-    class CocoaPlotImpl : public PlotImpl
-    {
-       public:
-        CocoaPlotImpl(const std::vector<std::pair<float, float>>& data, const std::string& title,
-                      const std::string& xLabel, const std::string& yLabel);
-        ~CocoaPlotImpl() override;
-        void Show() override;
-        bool BrowseForFolder(std::string& outFolder) override;
-        void DrawPlot(const int& newHeight, const int& newWidth);
-
-        void OnResize(const int& newWidth, const int& newHeight) override;
-        const std::vector<std::pair<float, float>> GetTransformedData(
-            const int windowWidth, const int windowHeight,
-            const std::pair<float, float>& plotBorderOffsets);
-        void OnMouseMove(int x, int y) override;
 
        protected:
-        std::pair<float, float> GetTransformedCoordinates(const int& x, const int& y,
-                                                          const int windowWidth,
-                                                          const int& windowHeight);
-        void DrawTextAtPosition(int x, int y, const std::string& text);
-        void DrawVerticalTextAtPosition(int x, int y, const std::string& text);
-        void DrawVerticalTick(const int tickCenterX, const int tickCenterY, const float tickValue,
-                              const int tickLength);
-        void DrawHorizontalTick(const int tickCenterX, const int tickCenterY, const float tickValue,
-                                const int tickLength);
-        void DrawAxes(const std::pair<float, float>& plotBorderOffsets);
-        void SetPlotViewData(const std::vector<std::pair<float, float>>& plotPoints);
-        void SetPlotViewMouseCoords(const float& x, const float& y);
+        WindowState m_windowState;
+        HWND m_hwnd;
+        std::map<int, std::function<void()>> m_menuCommands;
 
-        PlotView* plotView;
-        id resizeObserver;
-        id mouseMoveObserver;
+        LRESULT HandleMessage(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
+        void SaveHBITMAPToFile(HBITMAP hBitmap, const std::string& filename);
+        HBITMAP CaptureWindowContent(HWND hwnd);
+        COLORREF ToWin32Color(const Color color);
+        void DoDrawText(HDC hdc, GuiText text, RECT clientRect);
     };
+
+#elif defined(__linux__)
+
+#elif defined(__APPLE__)
+
 #endif
-#endif
 
-    // Pointer to Plot implementation
-    static std::unique_ptr<PlotImpl> PlotImpl_;
-};
+};  // Plot2D
 
-// Initialize static plotter implementation
-std::unique_ptr<Plot2D::PlotImpl> Plot2D::PlotImpl_ = nullptr;
+#ifdef _WIN32
 
-Plot2D::PlotImpl::PlotImpl(const std::vector<std::pair<float, float>>& data,
-                           const std::string& title, const std::string& xLabel,
-                           const std::string& yLabel)
-    : data(data), title(title), xLabel(xLabel), yLabel(yLabel)
+std::string Plot2D::FileName::Create(const std::string& dir, const std::string& filename)
 {
-    datasetSize = data.size();
+    std::string safeFilename = filename;
+    std::replace(safeFilename.begin(), safeFilename.end(), ':', '_');
 
-    std::pair<float, float> p;
-    float largestX = -(std::numeric_limits<float>::max)(),
-          largestY = -(std::numeric_limits<float>::max)();
-    float smallestX = (std::numeric_limits<float>::max)(),
-          smallestY = (std::numeric_limits<float>::max)();
-    for (int i = 0; i < datasetSize; i++)
+    std::string name = dir + "\\" + safeFilename;
+    return name;
+}
+void Plot2D::Win32Window::RunEventLoop()
+{
+    // Standard Win32 blocking message loop — exits when WindowProc posts PostQuitMessage
+    // (WM_DESTROY)
+    MSG msg;
+    while (GetMessage(&msg, nullptr, 0, 0) > 0)
     {
-        p = data[i];
-        if (p.first > largestX)
+        TranslateMessage(&msg);
+        DispatchMessage(&msg);
+    }
+}
+
+void Plot2D::Win32GraphicsContext::Init()
+{
+    Gdiplus::GdiplusStartupInput gdiplusStartupInput;
+    Gdiplus::GdiplusStartup(&m_gdiplusToken, &gdiplusStartupInput, NULL);
+
+}
+
+void Plot2D::Win32GraphicsContext::Shutdown()
+{
+    Gdiplus::GdiplusShutdown(m_gdiplusToken);
+ 
+}
+
+std::unique_ptr<Plot2D::IWindow> Plot2D::Win32GraphicsContext::MakeWindow(
+    Color background, std::pair<int, int> defaultSize, std::pair<int, int> minSize,
+    bool isVisible, const std::string& title)
+{
+    return std::make_unique<Plot2D::Win32Window>(defaultSize, std::pair<int, int>(0,0), title);
+}
+Plot2D::Win32Window::Win32Window(std::pair<int, int> defaultWindowSize, std::pair<int, int> pos,
+                                 std::string title)
+{
+    WNDCLASS wc = {};
+    wc.lpfnWndProc = WindowProc;
+    wc.style = CS_HREDRAW | CS_VREDRAW;
+    wc.hInstance = GetModuleHandle(NULL);
+    wc.lpszClassName = TEXT("PlotWindowClass");
+    wc.hbrBackground = (HBRUSH)(COLOR_WINDOW + 1);
+
+    if (!RegisterClass(&wc))
+    {
+        DWORD err = GetLastError();
+        // If class already exists that's fine; treat ERROR_CLASS_ALREADY_EXISTS as non-fatal
+        if (err != ERROR_CLASS_ALREADY_EXISTS)
         {
-            largestX = p.first;
-        }
-        if (p.first < smallestX)
-        {
-            smallestX = p.first;
-        }
-        if (p.second > largestY)
-        {
-            largestY = p.second;
-        }
-        if (p.second < smallestY)
-        {
-            smallestY = p.second;
+            std::cout << "Failed to register window class. Error: " << err << std::endl;
         }
     }
 
-    dataSpanX = largestX - smallestX;
-    dataSpanY = largestY - smallestY;
+    m_hwnd = CreateWindowEx(0, TEXT("PlotWindowClass"), title.c_str(), WS_OVERLAPPEDWINDOW,
+                            CW_USEDEFAULT, CW_USEDEFAULT, defaultWindowSize.first,
+                            defaultWindowSize.second, NULL, NULL, GetModuleHandle(NULL), this);
 
-    // The conversion from data-space to plot-space requires both coord systems to start from (0,
-    // 0). These values will be used to adjust the data points during transformation to achieve
-    // this.
-    PlotZeroOffset.first = smallestX;
-    PlotZeroOffset.second = smallestY;
+    if (!m_hwnd)
+    {
+        DWORD err = GetLastError();
+        std::cout << "Failed to create window. Error: " << err << std::endl;
+    }
 }
+void Plot2D::Win32Window::AddMenuButton(const std::string menu, const std::string label,
+                                        std::function<void()> onClickCallback)
+{
+    // Create the menu
+    HMENU hMenu = CreateMenu();
+    HMENU hFileMenu = CreateMenu();
+    int id = IDGenerator::Next();
+    AppendMenu(hFileMenu, MF_STRING, id, label.c_str());
+    AppendMenu(hMenu, MF_POPUP, (UINT_PTR)hFileMenu, menu.c_str());
 
-inline std::string Plot2D::PlotImpl::GetTimestamp()
+    SetMenu(m_hwnd, hMenu);
+
+    m_menuCommands.emplace(id, onClickCallback);
+}
+std::string Plot2D::Win32Window::GetTimestamp()
 {
     auto now = std::chrono::system_clock::now();
     std::time_t now_time = std::chrono::system_clock::to_time_t(now);
     std::string timestamp;
 
     std::tm local_time;
-#if defined(_WIN32)
     localtime_s(&local_time, &now_time);
-#else
-    localtime_r(&now_time, &local_time);
-#endif
     std::ostringstream oss;
     oss << std::put_time(&local_time, "%Y%m%d%H%M%S");
     timestamp = oss.str();
 
     return timestamp;
 }
-
-#pragma region Win32
-#ifdef _WIN32
-inline Plot2D::Win32PlotImpl::Win32PlotImpl(const std::vector<std::pair<float, float>>& data,
-                                            const std::string& title, const std::string& xLabel,
-                                            const std::string& yLabel)
-    : PlotImpl(data, title, xLabel, yLabel)
+Plot2D::WindowRect Plot2D::Win32Window::GetRect()
 {
-    Gdiplus::GdiplusStartupInput gdiplusStartupInput;
-    ULONG_PTR gdiplusToken;
-    InitGDIPlus(gdiplusStartupInput);
+    RECT rect;
+    GetClientRect(m_hwnd, &rect);
+
+    // Universal window assumes origin at bottom left. Win32 is at top left
+    return WindowRect(rect.bottom, rect.left, rect.right, rect.top);
 }
-inline Plot2D::Win32PlotImpl::~Win32PlotImpl()
+
+void Plot2D::Win32Window::SetIsVisible(bool isVisible)
 {
-    ShutdownGDIPlus();
+    ShowWindow(m_hwnd, isVisible);
 }
-void Plot2D::Win32PlotImpl::Show()
+
+bool Plot2D::Win32Window::SaveScreenshotAsPNG(const std::string& fileName)
 {
-    // Gdiplus::GdiplusStartupInput gdiplusStartupInput;
-    // ULONG_PTR gdiplusToken;
-    // InitGDIPlus(gdiplusStartupInput, gdiplusToken);
-
-    HWND hwnd = CreatePlotWindow(NULL, title);
-
-    ShowWindow(hwnd, SW_SHOW);
-    UpdateWindow(hwnd);
-
-    MSG msg = {};
-    while (GetMessage(&msg, NULL, 0, 0))
+    std::string dir;
+    if (BrowseForFolder(dir))
     {
-        TranslateMessage(&msg);
-        DispatchMessage(&msg);
+        std::string name = FileName::Create(dir, fileName + ".png");
+        HBITMAP hBitmap = CaptureWindowContent(m_hwnd);
+        SaveHBITMAPToFile(hBitmap, name);
+        DeleteObject(hBitmap);
+        std::stringstream wss;
+        wss << "Image Saved to" << std::string(name.begin(), name.end()) << ".";
+        MessageBox(m_hwnd, wss.str().c_str(), "Saved", MB_OK);
+    }
+    return true;
+}
+
+HBITMAP Plot2D::Win32Window::CaptureWindowContent(HWND hwnd)
+{
+    RECT rect;
+    if (!GetClientRect(hwnd, &rect)) return NULL;
+    int width = rect.right - rect.left;
+    int height = rect.bottom - rect.top;
+    if (width <= 0 || height <= 0) return NULL;
+
+    HDC hdcWindow = GetDC(hwnd);
+    if (!hdcWindow) return NULL;
+
+    HDC hdcMemDC = CreateCompatibleDC(hdcWindow);
+    if (!hdcMemDC)
+    {
+        ReleaseDC(hwnd, hdcWindow);
+        return NULL;
     }
 
-    // ShutdownGDIPlus(gdiplusToken);
-}
-void Plot2D::Win32PlotImpl::InitGDIPlus(Gdiplus::GdiplusStartupInput& gdiplusStartupInput)
-{
-    Gdiplus::GdiplusStartup(&gdiplusToken, &gdiplusStartupInput, NULL);
-}
-
-void Plot2D::Win32PlotImpl::ShutdownGDIPlus()
-{
-    Gdiplus::GdiplusShutdown(gdiplusToken);
-}
-
-void Plot2D::Win32PlotImpl::DrawTextAtPosition(HDC hdc, int x, int y, const std::string& text)
-{
-    SetTextColor(hdc, PLTCOLOR_WHITE);
-    SetBkMode(hdc, TRANSPARENT);
-    TextOut(hdc, x, y, std::wstring(text.begin(), text.end()).c_str(),
-            static_cast<int>(text.length()));
-}
-
-void Plot2D::Win32PlotImpl::DrawVerticalTextAtPosition(HDC hdc, int x, int y,
-                                                       const std::string& text)
-{
-    SetTextColor(hdc, PLTCOLOR_WHITE);
-    SetBkMode(hdc, TRANSPARENT);
-    std::wstring wtext(text.begin(), text.end());
-    // Each letter should be drawn lower than previous
-    for (wchar_t ch : wtext)
+    HBITMAP hbmScreen = CreateCompatibleBitmap(hdcWindow, width, height);
+    if (!hbmScreen)
     {
-        TextOut(hdc, x, y, &ch, 1);
-        y += 12;
+        DeleteDC(hdcMemDC);
+        ReleaseDC(hwnd, hdcWindow);
+        return NULL;
     }
-}
 
-void Plot2D::Win32PlotImpl::DrawPoints(HDC hdc, RECT rect,
-                                       const std::vector<std::pair<float, float>>& data,
-                                       const size_t& size,
-                                       const std::pair<float, float>& plotBorderOffsets)
-{
-    const float xPlotSpan = rect.right - 2 * plotBorderOffsets.first;
-    const float yPlotSpan = rect.bottom - 2 * plotBorderOffsets.second;
-    const float xScale = xPlotSpan / dataSpanX;
-    const float yScale = yPlotSpan / dataSpanY;
+    // Select the bitmap into the mem DC and save the old one
+    HBITMAP hOldBmp = (HBITMAP)SelectObject(hdcMemDC, hbmScreen);
 
-    std::pair<float, float> point;
-    HPEN hPen = CreatePen(PS_SOLID, 1, PLTCOLOR_GREEN);
-    SelectObject(hdc, hPen);
-    for (int i = 0; i < size; i++)
+    BOOL success = FALSE;
+
+    // Prefer PrintWindow (asks window to paint into DC). Fallback to BitBlt.
+    if (IsWindow(hwnd))
     {
-        point = data[i];
-        int x = static_cast<int>(((point.first - PlotZeroOffset.first) * xScale) +
-                                 plotBorderOffsets.first);
-        int y = static_cast<int>(yPlotSpan - ((point.second - PlotZeroOffset.second) * yScale) +
-                                 plotBorderOffsets.second);
-
-        if (i > 0)
+        // Some windows don't support PrintWindow. It may still work better for
+        // layered/double-buffered windows.
+        if (PrintWindow(hwnd, hdcMemDC, PW_CLIENTONLY) == TRUE)
         {
-            LineTo(hdc, x, y);
-        }
-        else
-        {
-            MoveToEx(hdc, x, y, NULL);
+            success = TRUE;
         }
     }
-    DeleteObject(hPen);
-}
 
-void Plot2D::Win32PlotImpl::DrawVerticalTick(HDC hdc, RECT rect, const int tickCenterX,
-                                             const int tickCenterY, const float tickValue,
-                                             const int tickLength)
-{
-    MoveToEx(hdc, tickCenterX, tickCenterY - tickLength, NULL);
-    LineTo(hdc, tickCenterX, tickCenterY + tickLength);
-    std::stringstream label;
-    label << std::setprecision(4) << tickValue;
-    DrawTextAtPosition(hdc, tickCenterX - 10, min(tickCenterY + 10, rect.bottom - 20), label.str());
-}
-
-void Plot2D::Win32PlotImpl::DrawHorizontalTick(HDC hdc, RECT rect, const int tickCenterX,
-                                               const int tickCenterY, const float tickValue,
-                                               const int tickLength)
-{
-    MoveToEx(hdc, tickCenterX - tickLength, tickCenterY, NULL);
-    LineTo(hdc, tickCenterX + tickLength, tickCenterY);
-    std::stringstream label;
-    label << std::setprecision(4) << tickValue;
-    std::string labelStr = label.str();
-    SIZE textSize;
-    TEXTMETRIC tm;
-    GetTextMetrics(hdc, &tm);
-    int avgCharWidth = tm.tmAveCharWidth;
-    int textWidth = avgCharWidth * (labelStr.size() + 1);
-    DrawTextAtPosition(hdc, max(10, tickCenterX - textWidth - tickLength), tickCenterY - 4,
-                       labelStr);
-}
-
-void Plot2D::Win32PlotImpl::DrawAxes(HDC hdc, RECT rect,
-                                     const std::pair<float, float>& plotBorderOffsets)
-{
-    HPEN hPen = CreatePen(PS_SOLID, 1, PLTCOLOR_WHITE);
-    SelectObject(hdc, hPen);
-
-    const int leftBorderPos = static_cast<int>(rect.left + plotBorderOffsets.first);
-    const int rightBorderPos = static_cast<int>(rect.right - plotBorderOffsets.first);
-    const int topBorderPos = static_cast<int>(rect.top + plotBorderOffsets.second);
-    const int bottomBorderPos = static_cast<int>(rect.bottom - plotBorderOffsets.second);
-
-    // Draw the border
-    MoveToEx(hdc, leftBorderPos, topBorderPos, NULL);
-    LineTo(hdc, rightBorderPos, topBorderPos);
-    LineTo(hdc, rightBorderPos, bottomBorderPos);
-    LineTo(hdc, leftBorderPos, bottomBorderPos);
-    LineTo(hdc, leftBorderPos, topBorderPos);
-
-    // Draw labels
-    DrawTextAtPosition(hdc, rect.right / 2, rect.bottom - 20, xLabel);
-    DrawVerticalTextAtPosition(hdc, rect.left + 10, rect.bottom / 2, yLabel);
-
-    std::wstringstream label;
-
-    // Draw X-axis ticks
-    int numTicksX = 4;
-    int x = 0;
-    float offset = PlotZeroOffset.first;
-    float increment = dataSpanX / (numTicksX + 1);
-    for (int i = 1; i <= numTicksX; ++i)
+    if (!success)
     {
-        x = leftBorderPos + i * (rightBorderPos - leftBorderPos) / (numTicksX + 1);
-        offset += increment;
-        DrawVerticalTick(hdc, rect, x, bottomBorderPos, offset, tickLength);
+        // Ensure the window is up-to-date (optional; use with care)
+        // UpdateWindow(hwnd);
+        success = BitBlt(hdcMemDC, 0, 0, width, height, hdcWindow, 0, 0, SRCCOPY);
     }
-    DrawVerticalTick(hdc, rect, rightBorderPos, bottomBorderPos, offset + increment, tickLength);
 
-    // Draw Y-axis ticks
-    int numTicksY = 4;
-    int y = 0;
-    increment = dataSpanY / (numTicksY + 1);
-    offset = PlotZeroOffset.second;
-    // Reverse loop since Windows set origin at upper left
-    for (int i = numTicksY; i > 0; i--)
+    // Restore original bitmap into mem DC before deleting DC
+    SelectObject(hdcMemDC, hOldBmp);
+
+    DeleteDC(hdcMemDC);
+    ReleaseDC(hwnd, hdcWindow);
+
+    if (!success)
     {
-        y = topBorderPos + (i * (bottomBorderPos - topBorderPos) / (numTicksY + 1));
-        offset += increment;
-        DrawHorizontalTick(hdc, rect, leftBorderPos, y, offset, tickLength);
+        // Clean up the bitmap we created
+        DeleteObject(hbmScreen);
+        return NULL;
     }
-    DrawHorizontalTick(hdc, rect, leftBorderPos, topBorderPos, offset + increment, tickLength);
 
-    DeleteObject(hPen);
+    // Caller owns the HBITMAP and must DeleteObject it when done
+    return hbmScreen;
 }
-
-void Plot2D::Win32PlotImpl::DrawCoordinates(HDC hdc, RECT rect,
-                                            const std::pair<float, float>& coordinates)
+void Plot2D::Win32Window::SaveHBITMAPToFile(HBITMAP hBitmap, const std::string& filename)
 {
-    // Convert coordinates to string
-    std::string coordText =
-        "X: " + std::to_string(coordinates.first) + " Y: " + std::to_string(coordinates.second);
-    std::wstring coordTextW(coordText.begin(), coordText.end());
+    auto GetEncoderClsid = [](const WCHAR* mimeType, CLSID* pClsid) -> int
+    {
+        UINT num = 0;   // number of image encoders
+        UINT size = 0;  // size of the image encoder array in bytes
 
-    // Set text color and background color
-    SetTextColor(hdc, PLTCOLOR_WHITE);
-    RECT coordinateRect = PLTRECT_MOUSE_DISPLAY_COORDS;
-    HBRUSH blackBrush = CreateSolidBrush(PLTCOLOR_BLACK);
-    FillRect(hdc, &coordinateRect, blackBrush);
-    DeleteObject(blackBrush);
-    SetBkMode(hdc, TRANSPARENT);
-    // Draw the coordinates in the top left corner
-    TextOut(hdc, rect.left, rect.top + 1, coordTextW.c_str(),
-            static_cast<int>(coordTextW.length()));
-}
+        Gdiplus::GetImageEncodersSize(&num, &size);
+        if (size == 0) return -1;  // Failure
 
-void Plot2D::Win32PlotImpl::SaveHBITMAPToFile(HBITMAP hBitmap, const std::string& filename)
-{
+        std::vector<BYTE> buffer(size);
+        Gdiplus::ImageCodecInfo* pImageCodecInfo =
+            reinterpret_cast<Gdiplus::ImageCodecInfo*>(buffer.data());
+
+        Gdiplus::GetImageEncoders(num, size, pImageCodecInfo);
+
+        for (UINT j = 0; j < num; ++j)
+        {
+            if (wcscmp(pImageCodecInfo[j].MimeType, mimeType) == 0)
+            {
+                *pClsid = pImageCodecInfo[j].Clsid;
+                return static_cast<int>(j);
+            }
+        }
+        return -1;
+    };
+
     Gdiplus::Bitmap bitmap(hBitmap, NULL);
     CLSID clsid;
-    CLSIDFromString(L"{557CF406-1A04-11D3-9A73-0000F81EF32E}", &clsid);  // PNG CLSID
+    HRESULT hr = CLSIDFromString(L"{557CF406-1A04-11D3-9A73-0000F81EF32E}", &clsid);  // PNG CLSID
+    if (FAILED(hr))
+    {
+        // Fallback: locate encoder by MIME type
+        if (GetEncoderClsid(L"image/png", &clsid) < 0)
+        {
+            std::wstring wfn(filename.begin(), filename.end());
+            std::string msg = "Failed to obtain PNG encoder CLSID. Cannot save: " + filename;
+            MessageBox(m_hwnd, msg.c_str(), "Save Error", MB_OK | MB_ICONERROR);
+            return;
+        }
+    }
     std::wstring wstr(filename.begin(), filename.end());
-    bitmap.Save(wstr.c_str(), &clsid, NULL);
+    Gdiplus::Status status = bitmap.Save(wstr.c_str(), &clsid, NULL);
+    if (status != Gdiplus::Ok)
+    {
+        std::string msg = "Failed to save image: " + filename;
+        MessageBox(m_hwnd, msg.c_str(), "Save Error", MB_OK | MB_ICONERROR);
+    }
+}
+LRESULT CALLBACK Plot2D::Win32Window::WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
+{
+    Win32Window* pThis = nullptr;
+    if (uMsg == WM_CREATE)
+    {
+        CREATESTRUCT* pCreate = reinterpret_cast<CREATESTRUCT*>(lParam);
+        pThis = reinterpret_cast<Win32Window*>(pCreate->lpCreateParams);
+        SetWindowLongPtr(hwnd, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(pThis));
+    }
+    else
+    {
+        pThis = reinterpret_cast<Win32Window*>(GetWindowLongPtr(hwnd, GWLP_USERDATA));
+    }
+
+    if (pThis)
+    {
+        return pThis->HandleMessage(hwnd, uMsg, wParam, lParam);
+    }
+    else
+    {
+        return DefWindowProc(hwnd, uMsg, wParam, lParam);
+    }
 }
 
-inline std::string Plot2D::Win32PlotImpl::wcharToString(const wchar_t* wcharStr)
-{
-    size_t len = std::wcslen(wcharStr);
-    char* mbstr = new char[len * 4 + 1];  // Allocate enough space for multibyte characters
-    std::wcstombs(mbstr, wcharStr, len * 4 + 1);
-    std::string str(mbstr);
-    delete[] mbstr;
-    return str;
-}
-bool Plot2D::Win32PlotImpl::BrowseForFolder(std::string& outFolder)
+bool Plot2D::Win32Window::BrowseForFolder(std::string& outFolder)
 {
     BROWSEINFO bi;
     ZeroMemory(&bi, sizeof(bi));
-    WCHAR szDisplayName[MAX_PATH];
-    WCHAR szPath[MAX_PATH];
+    char szDisplayName[MAX_PATH];
+    char szPath[MAX_PATH];
 
     bi.hwndOwner = NULL;
     bi.pidlRoot = NULL;
     bi.pszDisplayName = szDisplayName;
-    bi.lpszTitle = L"Choose Destination Folder";
+    bi.lpszTitle = "Choose Destination Folder";
     bi.ulFlags = BIF_RETURNONLYFSDIRS | BIF_NEWDIALOGSTYLE;
     bi.lpfn = NULL;
     bi.lParam = 0;
@@ -860,7 +964,7 @@ bool Plot2D::Win32PlotImpl::BrowseForFolder(std::string& outFolder)
     {
         if (SHGetPathFromIDList(pidl, szPath))
         {
-            std::string result(wcharToString(szPath));
+            std::string result(szPath);
             CoTaskMemFree(pidl);
             outFolder = result;
             return true;
@@ -869,150 +973,65 @@ bool Plot2D::Win32PlotImpl::BrowseForFolder(std::string& outFolder)
     }
     return false;
 }
+int Plot2D::Win32Window::GetAverageCharWidth()
+{
+    SIZE textSize;
+    TEXTMETRIC tm;
+    PAINTSTRUCT ps;
+    HDC hdc = BeginPaint(m_hwnd, &ps);
+    GetTextMetrics(hdc, &tm);
+    EndPaint(m_hwnd, &ps);
+    return tm.tmAveCharWidth;
+}
 
-HBITMAP Plot2D::Win32PlotImpl::CaptureWindowContent(HWND hwnd)
+inline LRESULT Plot2D::Win32Window::HandleMessage(HWND hwnd, UINT uMsg, WPARAM wParam,
+                                                  LPARAM lParam)
 {
     RECT rect;
     GetClientRect(hwnd, &rect);
-    HDC hdcWindow = GetDC(hwnd);
-    HDC hdcMemDC = CreateCompatibleDC(hdcWindow);
 
-    HBITMAP hbmScreen =
-        CreateCompatibleBitmap(hdcWindow, rect.right - rect.left, rect.bottom - rect.top);
-    SelectObject(hdcMemDC, hbmScreen);
-
-    BitBlt(hdcMemDC, 0, 0, rect.right - rect.left, rect.bottom - rect.top, hdcWindow, 0, 0,
-           SRCCOPY);
-
-    DeleteDC(hdcMemDC);
-    ReleaseDC(hwnd, hdcWindow);
-
-    return hbmScreen;
-}
-
-HWND Plot2D::Win32PlotImpl::CreatePlotWindow(HINSTANCE hInstance, const std::string& title)
-{
-    const wchar_t CLASS_NAME[] = L"PlotWindowClass";
-
-    WNDCLASS wc = {};
-    wc.lpfnWndProc = WindowProc;
-    wc.hInstance = hInstance;
-    wc.lpszClassName = CLASS_NAME;
-    wc.hbrBackground = (HBRUSH)(COLOR_WINDOW + 1);
-
-    RegisterClass(&wc);
-
-    HWND hwnd =
-        CreateWindowEx(0, CLASS_NAME, std::wstring(title.begin(), title.end()).c_str(),
-                       WS_OVERLAPPEDWINDOW, CW_USEDEFAULT, CW_USEDEFAULT, defaultWindowSize.first,
-                       defaultWindowSize.second, NULL, NULL, hInstance, this);
-
-    if (hwnd == NULL)
-    {
-        return 0;
-    }
-
-    // Create the menu
-    HMENU hMenu = CreateMenu();
-    HMENU hFileMenu = CreateMenu();
-
-    AppendMenu(hFileMenu, MF_STRING, PLTMENU_SAVE, L"Save");
-    AppendMenu(hMenu, MF_POPUP, (UINT_PTR)hFileMenu, L"File");
-
-    SetMenu(hwnd, hMenu);
-    return hwnd;
-}
-
-void Plot2D::Win32PlotImpl::DrawPlot(HDC hdc, RECT rect,
-                                     const std::vector<std::pair<float, float>>& data,
-                                     const std::pair<float, float>& plotBorderOffsets)
-{
-    HBRUSH blackBrush = CreateSolidBrush(PLTCOLOR_BLACK);
-    FillRect(hdc, &rect, blackBrush);
-    DeleteObject(blackBrush);
-    DrawAxes(hdc, rect, plotBorderOffsets);
-    DrawPoints(hdc, rect, data, data.size(), plotBorderOffsets);
-}
-
-inline LRESULT Plot2D::Win32PlotImpl::HandleMessage(HWND hwnd, UINT uMsg, WPARAM wParam,
-                                                    LPARAM lParam)
-{
-    RECT rect;
-    GetClientRect(hwnd, &rect);
-    const std::pair<float, float> plotBorderOffsets(rect.right * PLTBORDER_OFFSET_FACTOR,
-                                                    rect.bottom * PLTBORDER_OFFSET_FACTOR);
     switch (uMsg)
     {
         case WM_PAINT:
         {
-            if (datasetSize > props.deferredDrawLimit && isResizing)
-            {
-                // Dont paint while resizing for large datasets to reduce lag
-                return 0;
-            }
-
-            PAINTSTRUCT ps;
-            HDC hdc = BeginPaint(hwnd, &ps);
-            if (isMouseMoving)
-            {
-                DrawCoordinates(hdc, rect, mouseDisplayCoordinates);
-            }
-            else
-            {
-                DrawPlot(hdc, rect, data, plotBorderOffsets);
-            }
-            EndPaint(hwnd, &ps);
+            DrawWindowState();
 
             return 0;
         }
         case WM_ENTERSIZEMOVE:
         {
-            isResizing = true;
+            if (OnResizeStartCallback) OnResizeStartCallback();
             return 0;
         }
         case WM_EXITSIZEMOVE:
         {
-            isResizing = false;
+            if (OnResizeEndCallback) OnResizeEndCallback();
             InvalidateRect(hwnd, NULL, TRUE);
             return 0;
         }
         case WM_SIZE:
-            if (datasetSize < props.deferredDrawLimit)
-            {
-                // Allow continuous redraw
-                InvalidateRect(hwnd, NULL, TRUE);
-                break;
-            }
-            else
-            {
-                // Dataset is too large for smooth scaling, so prevent redraw
-                // until after size is finished
-                if (isResizing) return 0;
-            }
+        {
+            if (OnResizeCallback) OnResizeCallback();
+            break;
+        }
         case WM_COMMAND:
         {
             int wmId = LOWORD(wParam);
-            if (wmId == PLTMENU_SAVE)
+            auto it = m_menuCommands.find(wmId);
+            if (it != m_menuCommands.end())
             {
-                std::string dir;
-                if (BrowseForFolder(dir))
-                {
-                    std::string name = GetFileName(dir);
-                    HBITMAP hBitmap = CaptureWindowContent(hwnd);
-                    SaveHBITMAPToFile(hBitmap, name);
-                    DeleteObject(hBitmap);
-                    std::wstringstream wss;
-                    wss << L"Image Saved to" << std::wstring(name.begin(), name.end()) << L".";
-                    MessageBox(hwnd, wss.str().c_str(), L"Saved", MB_OK);
-                }
+                // Invoke the function tied to this menu item
+                std::function<void()> func = it->second;
+                if (func) func();
             }
             break;
         }
         case WM_GETMINMAXINFO:
         {
+            std::pair<int, int> sizes = m_windowState.minSize;
             MINMAXINFO* minMaxInfo = (MINMAXINFO*)lParam;
-            minMaxInfo->ptMinTrackSize.x = minWindowSize.first;
-            minMaxInfo->ptMinTrackSize.y = minWindowSize.second;
+            minMaxInfo->ptMinTrackSize.x = sizes.first;
+            minMaxInfo->ptMinTrackSize.y = sizes.second;
             break;
         }
         case WM_MOUSEMOVE:
@@ -1020,23 +1039,9 @@ inline LRESULT Plot2D::Win32PlotImpl::HandleMessage(HWND hwnd, UINT uMsg, WPARAM
             // Get the mouse position
             int x = LOWORD(lParam);
             int y = HIWORD(lParam);
-            bool inside =
-                (x >= plotBorderOffsets.first && x <= rect.right - plotBorderOffsets.first) &&
-                (y >= plotBorderOffsets.second && y <= rect.bottom - plotBorderOffsets.second);
-
-            if (inside)
-            {
-                isMouseMoving = true;
-                RECT textRect = PLTRECT_MOUSE_DISPLAY_COORDS;
-                mouseDisplayCoordinates =
-                    GetMouseCoordinatesInDataSpace(rect, x, y, plotBorderOffsets);
-                InvalidateRect(hwnd, &textRect, FALSE);
-                UpdateWindow(hwnd);
-            }
-            else
-            {
-                isMouseMoving = false;
-            }
+            if (OnMouseHoverCallback)
+                OnMouseHoverCallback(Point(
+                    x, rect.bottom - y));  // Give Y in the expected universal coordinate system
 
             break;
         }
@@ -1058,21 +1063,398 @@ inline LRESULT Plot2D::Win32PlotImpl::HandleMessage(HWND hwnd, UINT uMsg, WPARAM
     }
     return DefWindowProc(hwnd, uMsg, wParam, lParam);
 }
-std::string Plot2D::Win32PlotImpl::GetFileName(const std::string& directory)
+COLORREF Plot2D::Win32Window::ToWin32Color(const Color color)
 {
-    std::string name = directory + "\\" + title + "_" + GetTimestamp() + ".png";
-    std::replace(name.begin(), name.end(), ':', '_');
-    return name;
+    return RGB(color.r, color.g, color.b);
 }
-std::pair<float, float> Plot2D::Win32PlotImpl::GetMouseCoordinatesInDataSpace(
-    RECT rect, const int x, const int y, const std::pair<float, float>& plotBorderOffset)
+
+void Plot2D::Win32Window::DrawTextAt(const std::string text, int spacing, int size,
+                                     Point startPos,
+                                     Orientation orientation,
+                                     Color color)
 {
+    m_windowState.text.push_back(GuiText(text, startPos, spacing, color, orientation));
+}
+void Plot2D::Win32Window::DoDrawText(HDC hdc, GuiText text, RECT clientRect)
+{
+    SetTextColor(hdc, ToWin32Color(text.color));
+    SetBkMode(hdc, TRANSPARENT);
+    TextOut(hdc, text.pos.first, clientRect.bottom - text.pos.second, text.text.c_str(),
+            static_cast<int>(text.text.length()));
+}
+
+void Plot2D::Win32Window::DrawWindowState()
+{
+    RECT rect;
+    GetClientRect(m_hwnd, &rect);
+    PAINTSTRUCT ps;
+    HDC hdc = BeginPaint(m_hwnd, &ps);
+
+    // Fill background
+    HBRUSH blackBrush = CreateSolidBrush(ToWin32Color(m_windowState.background));
+    FillRect(hdc, &rect, blackBrush);
+    DeleteObject(blackBrush);
+
+    // Draw Polylines
+    std::map<Color, HPEN> brushes;  // HPEN hashmap
+    HPEN hpen = nullptr;
+    std::map<Color, HPEN>::iterator it;
+    for (GuiPolyline polyline : m_windowState.polylines)
+    {
+        // Get brush for current line from hashmap or add new mapping
+        it = brushes.find(polyline.color);
+        if (it != brushes.end())
+        {
+            hpen = it->second;
+        }
+        else
+        {
+            hpen = CreatePen(PS_SOLID, 1, ToWin32Color(polyline.color));
+            brushes.emplace(polyline.color, hpen);
+        }
+
+        int size = polyline.points.size();
+        SelectObject(hdc, hpen);
+
+        // Draw initial point, then LineTo the rest
+        MoveToEx(hdc, polyline.points[0].first, rect.bottom - polyline.points[0].second, NULL);
+        LineTo(hdc, polyline.points[0].first, rect.bottom - polyline.points[0].second);
+        for (int i = 1; i < size; i++)
+        {
+            LineTo(hdc, polyline.points[i].first, rect.bottom - polyline.points[i].second);
+        }
+    }
+
+    // Draw Lines
+    for (GuiLine line : m_windowState.lines)
+    {
+        // Get brush for current line from hashmap or add new mapping
+
+        it = brushes.find(line.color);
+        if (it != brushes.end())
+        {
+            hpen = it->second;
+        }
+        else
+        {
+            hpen = CreatePen(PS_SOLID, 1, ToWin32Color(line.color));
+            brushes.emplace(line.color, hpen);
+        }
+
+        SelectObject(hdc, hpen);
+
+        // Draw initial point, then LineTo the rest
+        MoveToEx(hdc, line.p1.first, rect.bottom - line.p1.second, NULL);
+        LineTo(hdc, line.p2.first, rect.bottom - line.p2.second);
+    }
+
+    // Draw Text
+    for (GuiText text : m_windowState.text)
+    {
+        DoDrawText(hdc, text, rect);
+    }
+
+    // Delete HPEN objects
+    for (const auto& pair : brushes)
+    {
+        if (pair.second)
+            DeleteObject(pair.second);
+    }
+
+    EndPaint(m_hwnd, &ps);
+}
+
+void Plot2D::Win32Window::InvalidateRegion(const Plot2D::WindowRect& windowRect,
+                                           const Plot2D::WindowState& windowState)
+{
+    m_windowState = windowState;
+    RECT win32Rect;
+    GetClientRect(m_hwnd, &win32Rect);
+
+    // Universal coords assume origin at bottom left and extend up. Win32 is the opposite
+    const RECT rect = {windowRect.left, win32Rect.bottom - windowRect.top, windowRect.right,
+                       win32Rect.bottom - windowRect.bottom};
+    InvalidateRect(m_hwnd, &rect, FALSE);
+}
+
+void Plot2D::Win32Window::Invalidate(const Plot2D::WindowState& windowState)
+{
+    m_windowState = windowState;
+    InvalidateRect(m_hwnd, nullptr, FALSE);
+}
+
+#elif defined(__linux__)
+
+#elif defined(__APPLE__)
+
+#endif
+
+std::unique_ptr<Plot2D::IGraphicsContext> Plot2D::m_graphicsContext = nullptr;
+
+template <typename T>
+Plot2D::Plot2D(const std::vector<T>& x, const std::vector<T>& y, const std::string& title,
+               const std::string& xLabel, const std::string& yLabel)
+    : xLabel(xLabel), yLabel(yLabel), title(title)
+{
+    // Check that x and y vectors are the same size and are numeric
+    static_assert(std::is_arithmetic<T>::value && !std::is_same<T, bool>::value,
+                  "Plot2D requires a numeric type for T (bool is not allowed)");
+
+    //assert(!x.empty() && !y.empty(), "");
+    assert(x.size() == y.size());
+
+    datasetSize = x.size();
+
+    for (size_t i = 0; i < datasetSize; ++i)
+    {
+        m_data.emplace_back(static_cast<float>(x[i]), static_cast<float>(y[i]));
+    }
+
+    
+    // Get largest and smallest points in dataset
+    std::pair<float, float> p;
+    float largestX = -(std::numeric_limits<float>::max)(),
+          largestY = -(std::numeric_limits<float>::max)();
+    float smallestX = (std::numeric_limits<float>::max)(),
+          smallestY = (std::numeric_limits<float>::max)();
+    for (int i = 0; i < datasetSize; i++)
+    {
+        p = m_data[i];
+        if (p.first > largestX)
+        {
+            largestX = p.first;
+        }
+        if (p.first < smallestX)
+        {
+            smallestX = p.first;
+        }
+        if (p.second > largestY)
+        {
+            largestY = p.second;
+        }
+        if (p.second < smallestY)
+        {
+            smallestY = p.second;
+        }
+    }
+
+    // The data span is the differnce between the largest and smallest points
+    dataSpanX = largestX - smallestX;
+    dataSpanY = largestY - smallestY;
+
+    // The conversion from data-space to plot-space requires both coord systems to start from (0,
+    // 0). These values will be used to adjust the m_data points during transformation to achieve
+    // this.
+    PlotZeroOffset.first = smallestX;
+    PlotZeroOffset.second = smallestY;
+
+#ifdef _WIN32
+    m_graphicsContext = std::make_unique<Win32GraphicsContext>();
+#elif defined(__APPLE__)
+#ifdef __OBJC__
+    m_graphicsContext = CocoaGraphicsContext();
+#endif
+#elif defined(__linux__)
+    m_graphicsContext = X11GraphicsContext();
+#else
+    std::throw(std::exception("Unsupported platform."));
+#endif
+    m_graphicsContext->Init();
+    m_window =
+        m_graphicsContext->MakeWindow(Color::Black(), defaultWindowSize, minWindowSize, false, title);
+    m_window->OnMouseHoverCallback = [this](Point p) { this->OnMouseHoverCallback(*m_window, p); };
+    m_window->OnResizeCallback = [this]() { this->OnWindowResizeCallback(*m_window); };
+    m_window->OnResizeEndCallback = [this]() { this->OnWindowResizeEndCallback(*m_window); };
+    m_window->AddMenuButton("File", "Save", [this]() { this->OnSaveButtonClicked(*m_window); });
+
+    UpdatePlotWindowState(m_plotWindowState, *m_window);
+
+   /* m_window->Invalidate(m_plotWindowState);
+    m_window->SetIsVisible(true);*/
+}
+
+void Plot2D::UpdatePlotWindowState(Plot2D::WindowState& windowState, IWindow& window)
+{
+    windowState.background = Color::Black();
+    windowState.polylines.clear();
+    windowState.polylines.push_back(GetDataPolyline(
+        m_data, Color::Green(),
+        window));  // TODO: Make sure different plot types (scatter, bar, etc...) are supported
+    windowState.polylines.push_back(GetPlotBorderPolyline(window, Color::White()));
+
+    std::pair<std::vector<GuiLine>, std::vector<GuiText>> ticks =
+        GetPlotBorderTickLines(window, Color::White());
+    windowState.lines.clear();
+    windowState.text.clear();
+    windowState.lines.insert(windowState.lines.end(), ticks.first.begin(), ticks.first.end());
+    windowState.text.insert(windowState.text.end(), ticks.second.begin(), ticks.second.end());
+
+    std::vector<GuiText> labels = GetPlotLabels(window, Color::White());
+    windowState.text.insert(windowState.text.end(), labels.begin(), labels.end());
+}
+
+Plot2D::GuiPolyline Plot2D::GetPlotBorderPolyline(IWindow& window, Color color)
+{
+    WindowRect rect = window.GetRect();
+    const int leftBorderPos = static_cast<int>(rect.left + m_plotBorderOffsets.first);
+    const int rightBorderPos = static_cast<int>(rect.right - m_plotBorderOffsets.first);
+    const int topBorderPos = static_cast<int>(rect.top - m_plotBorderOffsets.second);
+    const int bottomBorderPos = static_cast<int>(rect.bottom + m_plotBorderOffsets.second);
+
+    // Bottom left corner -> top left corner -> top right corner ->
+    // Bottom right corner -> bottom left corner
+    std::vector<Point> borderPoints{{leftBorderPos, bottomBorderPos},
+                                    {leftBorderPos, topBorderPos},
+                                    {rightBorderPos, topBorderPos},
+                                    {rightBorderPos, bottomBorderPos},
+                                    {leftBorderPos, bottomBorderPos}};
+
+    return GuiPolyline(borderPoints, color, 1);
+}
+
+std::pair<std::vector<Plot2D::GuiLine>, std::vector<Plot2D::GuiText>>
+Plot2D::GetPlotBorderTickLines(IWindow& window, Color color)
+{
+    // TODO: Consolidate magic numbers
+
+    WindowRect rect = window.GetRect();
+    const int leftBorderPos = static_cast<int>(rect.left + m_plotBorderOffsets.first);
+    const int rightBorderPos = static_cast<int>(rect.right - m_plotBorderOffsets.first);
+    const int topBorderPos = static_cast<int>(rect.top - m_plotBorderOffsets.second);
+    const int bottomBorderPos = static_cast<int>(rect.bottom + m_plotBorderOffsets.second);
+
+    std::vector<GuiLine> ticks;
+    std::vector<GuiText> labels;
+    std::stringstream label;
+
+    // Draw X-axis ticks
+    int numTicksX = 4;
+    int x = 0;
+    float offset = PlotZeroOffset.first;
+    int tickInterval = (rightBorderPos - leftBorderPos) / (numTicksX + 1);
+    float increment = dataSpanX / (numTicksX + 1);
+    for (int i = 1; i <= numTicksX; ++i)
+    {
+        x = leftBorderPos + i * tickInterval;
+        offset += increment;
+
+        // Add tick line
+        ticks.push_back(
+            GuiLine({x, bottomBorderPos + tickLength}, {x, bottomBorderPos - tickLength}, color));
+
+        // Add tick label
+        label.str("");
+        label << std::setprecision(4) << offset;
+        labels.push_back(GuiText(label.str(), {x - 10, max(bottomBorderPos - 10, rect.bottom + 20)},
+                                 1, color, Orientation::HORIZONTAL));
+    }
+    ticks.push_back(GuiLine({rightBorderPos, bottomBorderPos + tickLength},
+                            {rightBorderPos, bottomBorderPos - tickLength}, color));
+    label.str("");
+    label << std::setprecision(4) << offset + increment;
+    labels.push_back(GuiText(label.str(),
+                             {rightBorderPos - 10, max(bottomBorderPos - 10, rect.bottom + 20)}, 1,
+                             color, Orientation::HORIZONTAL));
+
+    // Draw Y-axis ticks
+    int numTicksY = 4;
+    int y = 0;
+    increment = dataSpanY / (numTicksY + 1);
+    offset = PlotZeroOffset.second;
+    tickInterval = (topBorderPos - bottomBorderPos) / (numTicksY + 1);
+    int avgCharWidth = window.GetAverageCharWidth();
+    for (int i = 1; i <= numTicksY; i++)
+    {
+        y = bottomBorderPos + (i * tickInterval);
+        offset += increment;
+
+        // Add tick line
+        ticks.push_back(
+            GuiLine({leftBorderPos - tickLength, y}, {leftBorderPos + tickLength, y}, color));
+
+        // Add tick label
+        label.str("");
+        label << std::setprecision(4) << offset;
+        labels.push_back(GuiText(
+            label.str(),
+            {(int)max(10, leftBorderPos - avgCharWidth * (label.str().size() + 1) - tickLength), y - 4},
+            1, color, Orientation::HORIZONTAL));
+    }
+    ticks.push_back(GuiLine({leftBorderPos - tickLength, topBorderPos},
+                            {leftBorderPos + tickLength, topBorderPos}, color));
+    label.str("");
+    label << std::setprecision(4) << offset;
+    labels.push_back(GuiText(
+        label.str(),
+        {(int)max(10, leftBorderPos - avgCharWidth * (label.str().size() + 1) - tickLength), topBorderPos - 4}, 1,
+        color, Orientation::HORIZONTAL));
+
+    return {ticks, labels};
+}
+
+std::vector<Plot2D::GuiText> Plot2D::GetPlotLabels(IWindow& window, Color color)
+{
+    WindowRect rect = window.GetRect();
+
+    std::vector<GuiText> labels{3};
+    labels[0] = GuiText(xLabel, Point(rect.right / 2, rect.bottom + 20), 1, color,
+                        Orientation::HORIZONTAL);  // X-axis label
+    labels[1] = GuiText(yLabel, Point(rect.left + 20, rect.top / 2), 1, color,
+                        Orientation::VERTICAL);  // Y-axis label
+    labels[2] = GuiText(title, Point(rect.right / 2, rect.top - 10), 1, color,
+                        Orientation::HORIZONTAL);  // Plot title
+
+    return labels;
+}
+
+Plot2D::GuiPolyline Plot2D::GetDataPolyline(const std::vector<std::pair<float, float>>& data,
+                                            Color color, IWindow& window)
+{
+    WindowRect rect = window.GetRect();
+    const float xPlotSpan = rect.right - 2 * m_plotBorderOffsets.first;
+    const float yPlotSpan = rect.top - 2 * m_plotBorderOffsets.second;
+    const float xScale = xPlotSpan / dataSpanX;
+    const float yScale = yPlotSpan / dataSpanY;
+
+    std::vector<Point> lines(datasetSize);  // Allocate enough spaces for dataset
+    std::vector<uint8_t> pixel_mask(rect.top * rect.right, 0);
+    std::vector<Point> to_draw;
+    to_draw.reserve(lines.size());
+
+    size_t idx;
+    int x, y;
+    Point transformedPoint;
+    std::pair<float, float> point;
+    for (int i = 0; i < datasetSize; i++)
+    {
+        point = data[i];
+        transformedPoint = {static_cast<int>(((point.first - PlotZeroOffset.first) * xScale) +
+                                             m_plotBorderOffsets.first),
+                            static_cast<int>(((point.second - PlotZeroOffset.second) * yScale) +
+                                             m_plotBorderOffsets.second)};
+        idx = transformedPoint.second * rect.right + transformedPoint.first;
+        if (!pixel_mask[idx])
+        {
+            pixel_mask[idx] = 1;
+            to_draw.push_back(transformedPoint);
+        }
+        //lines[i] = Point(x, y);
+    }
+
+    GuiPolyline polyline(to_draw, color);
+    return polyline;
+}
+
+std::pair<float, float> Plot2D::AbsToPlot(IWindow& window, const int x, const int y,
+                                          const std::pair<float, float>& plotBorderOffset)
+{
+    WindowRect rect = window.GetRect();
     if ((x >= plotBorderOffset.first && x <= rect.right - plotBorderOffset.first) &&
         (y >= plotBorderOffset.second && y <= rect.bottom - plotBorderOffset.second))
     {
         // Scale absolute mouse coordinates to plot window space
-        const float xPlotSpan = rect.right - 2 * plotBorderOffset.first;
-        const float yPlotSpan = rect.bottom - 2 * plotBorderOffset.second;
+        const float xPlotSpan = (rect.right - rect.left) - 2 * plotBorderOffset.first;
+        const float yPlotSpan = (rect.top - rect.bottom) - 2 * plotBorderOffset.second;
         float xScale = dataSpanX / xPlotSpan;
         float yScale = dataSpanY / yPlotSpan;
 
@@ -1087,410 +1469,100 @@ std::pair<float, float> Plot2D::Win32PlotImpl::GetMouseCoordinatesInDataSpace(
         return std::pair<float, float>(0.0f, 0.0f);
     }
 }
-LRESULT CALLBACK Plot2D::Win32PlotImpl::WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam,
-                                                   LPARAM lParam)
+void Plot2D::Show(bool block)
 {
-    Win32PlotImpl* pThis = nullptr;
-    if (uMsg == WM_CREATE)
-    {
-        CREATESTRUCT* pCreate = reinterpret_cast<CREATESTRUCT*>(lParam);
-        pThis = reinterpret_cast<Win32PlotImpl*>(pCreate->lpCreateParams);
-        SetWindowLongPtr(hwnd, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(pThis));
-    }
-    else
-    {
-        pThis = reinterpret_cast<Win32PlotImpl*>(GetWindowLongPtr(hwnd, GWLP_USERDATA));
-    }
-
-    if (pThis)
-    {
-        return pThis->HandleMessage(hwnd, uMsg, wParam, lParam);
-    }
-    else
-    {
-        return DefWindowProc(hwnd, uMsg, wParam, lParam);
-    }
+    m_window->SetIsVisible(true);
+    if (block)
+        m_window->RunEventLoop();
+}
+inline std::pair<float, float> Plot2D::GetPlotBorderOffsets()
+{
+    return m_plotBorderOffsets;
+}
+void Plot2D::SetPlotBorderOffsets(std::pair<float, float> offsets)
+{
+    m_plotBorderOffsets = offsets;
 }
 
-#endif
-#pragma endregion
-
-#pragma region APPLE
-#ifdef __APPLE__
-#ifdef __OBJC__
-inline Plot2D::CocoaPlotImpl::CocoaPlotImpl(const std::vector<std::pair<float, float>>& data,
-                                            const std::string& title, const std::string& xLabel,
-                                            const std::string& yLabel)
-    : PlotImpl(data, title, xLabel, yLabel)
+void Plot2D::OnWindowResizeCallback(IWindow& window)
 {
-}
+    std::pair<int, int> size = window.GetRect().Size();
 
-inline Plot2D::CocoaPlotImpl::~CocoaPlotImpl()
-{
-    // Remove event bindings
-    [[NSNotificationCenter defaultCenter] removeObserver:resizeObserver];
-    [[NSNotificationCenter defaultCenter] removeObserver:mouseMoveObserver];
-}
+    SetPlotBorderOffsets(std::pair<float, float>{size.first * m_plotBorderOffsetFactor,
+                                                 size.second * m_plotBorderOffsetFactor});
 
-inline void Plot2D::CocoaPlotImpl::Show()
-{
-    if (![NSApplication sharedApplication])
+    if (datasetSize < m_deferredResizeLimit)
     {
-        [NSApplication sharedApplication];
+        UpdatePlotWindowState(m_plotWindowState, *m_window);
+        window.Invalidate(m_plotWindowState);
     }
-
-    // Create a window
-    NSRect frame = NSMakeRect(0, 0, defaultWindowSize.first, defaultWindowSize.second);
-    NSWindow* window =
-        [[NSWindow alloc] initWithContentRect:frame
-                                    styleMask:(NSWindowStyleMaskTitled | NSWindowStyleMaskClosable |
-                                               NSWindowStyleMaskResizable)
-                                      backing:NSBackingStoreBuffered
-                                        defer:NO];
-
-    [window setTitle:[NSString stringWithUTF8String:title.c_str()]];
-    [window makeKeyAndOrderFront:nil];
-    [window setAcceptsMouseMovedEvents:YES];
-
-    // Create and attach a delegate to handle window close
-    WindowDelegate* delegate = [[WindowDelegate alloc] init];
-    [window setDelegate:delegate];
-
-    NSMenu* mainMenu = [[NSMenu alloc] init];
-
-    // Create "File" menu
-    NSMenuItem* fileMenuItem =
-        [[NSMenuItem alloc] initWithTitle:@"File" action:nil keyEquivalent:@""];
-    [mainMenu addItem:fileMenuItem];
-
-    NSMenu* fileMenu = [[NSMenu alloc] initWithTitle:@"File"];
-    [fileMenuItem setSubmenu:fileMenu];
-
-    // Add "Save" option to File menu
-    NSMenuItem* saveItem = [[NSMenuItem alloc] initWithTitle:@"Save..."
-                                                      action:@selector(savePlot:)
-                                               keyEquivalent:@"s"];
-
-    // Ensure it calls a method in PlotView
-    [saveItem setTarget:plotView];
-    [fileMenu addItem:saveItem];
-
-    // Set the main menu
-    [NSApp setMainMenu:mainMenu];
-
-    // Create the PlotView instance and set it as the window's content view
-    plotView = [[PlotView alloc] initWithFrame:frame];
-    [plotView setNeedsDisplay:YES];
-    [window setContentView:plotView];
-    [plotView display];
-
-    // Perform initial calculation for starting window size
-    const std::pair<float, float> plotBorderOffset = {
-        defaultWindowSize.first * PLTBORDER_OFFSET_FACTOR,
-        defaultWindowSize.second * PLTBORDER_OFFSET_FACTOR};
-    std::vector<std::pair<float, float>> plotPoints =
-        GetTransformedData(defaultWindowSize.first, defaultWindowSize.second, plotBorderOffset);
-    SetPlotViewData(plotPoints);
-
-    DrawAxes(plotBorderOffset);
-
-    // Subscribe to resize event if limit is high enough
-    if (datasetSize < deferredResizeLimit)
-    {
-        resizeObserver =
-            [[NSNotificationCenter defaultCenter] addObserverForName:NSWindowDidResizeNotification
-                                                              object:nil
-                                                               queue:[NSOperationQueue mainQueue]
-                                                          usingBlock:^(NSNotification* note) {
-                                                            NSSize size = plotView.frame.size;
-                                                            this->OnResize(size.width, size.height);
-                                                          }];
-    }
-    else
-    {
-        resizeObserver = [[NSNotificationCenter defaultCenter]
-            addObserverForName:NSWindowDidEndLiveResizeNotification
-                        object:nil
-                         queue:[NSOperationQueue mainQueue]
-                    usingBlock:^(NSNotification* note) {
-                      // NSWindow* window = (NSWindow*)note.object;
-                      NSSize size = plotView.frame.size;
-                      this->OnResize(size.width, size.height);
-                    }];
-    }
-
-    // Subscribe to mouse events
-    mouseMoveObserver =
-        [[NSNotificationCenter defaultCenter] addObserverForName:MouseMovedNotification
-                                                          object:nil
-                                                           queue:[NSOperationQueue mainQueue]
-                                                      usingBlock:^(NSNotification* note) {
-                                                        NSDictionary* userInfo = note.userInfo;
-                                                        float x = [userInfo[@"x"] floatValue];
-                                                        float y = [userInfo[@"y"] floatValue];
-                                                        this->OnMouseMove(x, y);
-                                                      }];
-
-    // Start the event loop
-    [NSApp run];
 }
-void Plot2D::CocoaPlotImpl::OnMouseMove(int x, int y)
+void Plot2D::OnWindowResizeEndCallback(IWindow& window)
 {
-    CGSize size = plotView.frame.size;
-    std::pair<float, float> plotCoords = GetTransformedCoordinates(x, y, size.width, size.height);
-    SetPlotViewMouseCoords(plotCoords.first, plotCoords.second);
+    std::pair<int, int> size = window.GetRect().Size();
+
+    SetPlotBorderOffsets(std::pair<float, float>{size.first * m_plotBorderOffsetFactor,
+                                                 size.second * m_plotBorderOffsetFactor});
+    UpdatePlotWindowState(m_plotWindowState, *m_window);
+    window.Invalidate(m_plotWindowState);
 }
 
-void Plot2D::CocoaPlotImpl::SetPlotViewMouseCoords(const float& x, const float& y)
-{
-    // Convert C++ vector to NSPoint for Objective-C
-    NSPoint point = NSMakePoint(static_cast<CGFloat>(x), static_cast<CGFloat>(y));
-
-    [plotView updateDisplayCoordinates:point];
-}
-std::pair<float, float> Plot2D::CocoaPlotImpl::GetTransformedCoordinates(const int& x, const int& y,
+// TODO: Refactor
+std::pair<float, float> Plot2D::GetTransformedCoordinates(const int& x, const int& y,
                                                                          const int windowWidth,
                                                                          const int& windowHeight)
 {
-    const std::pair<float, float> plotBorderOffset = {windowWidth * PLTBORDER_OFFSET_FACTOR,
-                                                      windowHeight * PLTBORDER_OFFSET_FACTOR};
-    if ((x >= plotBorderOffset.first && x <= windowWidth - plotBorderOffset.first) &&
-        (y >= plotBorderOffset.second && y <= windowHeight - plotBorderOffset.second))
-    {
-        // Scale absolute mouse coordinates to plot window space
-        const float xPlotSpan = windowWidth - 2 * plotBorderOffset.first;
-        const float yPlotSpan = windowHeight - 2 * plotBorderOffset.second;
-        float xScale = dataSpanX / xPlotSpan;
-        float yScale = dataSpanY / yPlotSpan;
+    // Scale absolute coordinates to plot window space
+    const float xPlotSpan = windowWidth - 2 * m_plotBorderOffsets.first;
+    const float yPlotSpan = windowHeight - 2 * m_plotBorderOffsets.second;
+    float xScale = dataSpanX / xPlotSpan;
+    float yScale = dataSpanY / yPlotSpan;
 
-        // In Cocoa windows, (0,0) is botton left corner
-        return std::pair<float, float>(
-            (x - plotBorderOffset.first) * xScale + PlotZeroOffset.first,
-            ((/*yPlotSpan - */ y - plotBorderOffset.second) * yScale + PlotZeroOffset.second));
+    return std::pair<float, float>(
+        (x - m_plotBorderOffsets.first) * xScale + PlotZeroOffset.first,
+        ((y - m_plotBorderOffsets.second) * yScale + PlotZeroOffset.second));
+}
+void Plot2D::OnMouseHoverCallback(IWindow& w, Point mousePos)
+{
+    std::pair<float, float> plotBorderOffsets = GetPlotBorderOffsets();
+    WindowRect rect = w.GetRect();
+    bool inside = (mousePos.first >= plotBorderOffsets.first &&
+                   mousePos.first <= (rect.Size().first) - plotBorderOffsets.first) &&
+                  (mousePos.second >= plotBorderOffsets.second &&
+                   mousePos.second <= (rect.Size().second) - plotBorderOffsets.second);
+
+    auto transformedCoords = GetTransformedCoordinates(mousePos.first, mousePos.second,
+                                                       rect.Size().first, rect.Size().second);
+    std::string coordText = "X: " + std::to_string(transformedCoords.first) +
+                            " Y: " + std::to_string(transformedCoords.second);
+
+    // Start mouse coordinate text at top left & 1 unit from top
+    int x = rect.left;
+    int y = rect.top - 1;
+
+    // mouse coordinates should fit inside a rect that starts at the top left corner and extends 200
+    // wide and 30 high
+    WindowRect mouseCoordinateRect(rect.top, rect.left, rect.left + 200,
+                                   rect.top - 30);  // TODO: validate
+    if (inside)
+    {
+        WindowState mouseCoordinates;
+        mouseCoordinates.text = {
+            GuiText(coordText, Point(x, y), 1, Color::White(), Orientation::HORIZONTAL)};
+        mouseCoordinates.background = Color::Black();
+        w.InvalidateRegion(mouseCoordinateRect, mouseCoordinates);
     }
     else
     {
-        // Outside the plot window just default to (0,0)
-        return std::pair<float, float>(0.0f, 0.0f);
+        WindowState empty;
+        empty.background = Color::Black();
+        w.InvalidateRegion(mouseCoordinateRect, empty);
     }
 }
-const std::vector<std::pair<float, float>> Plot2D::CocoaPlotImpl::GetTransformedData(
-    const int windowWidth, const int windowHeight, const std::pair<float, float>& plotBorderOffsets)
+
+void Plot2D::OnSaveButtonClicked(IWindow& w)
 {
-    const float xPlotSpan = windowWidth - 2 * plotBorderOffsets.first;
-    const float yPlotSpan = windowHeight - 2 * plotBorderOffsets.second;
-    const float xScale = xPlotSpan / dataSpanX;
-    const float yScale = yPlotSpan / dataSpanY;
-
-    //	size_t numThreads = std::thread::hardware_concurrency();
-    //	size_t chunkSize = data.size() / numThreads;
-    //	std::vector<std::thread> threads;
-    //	for (size_t i = 0; i < numThreads; ++i) {
-    //			size_t start = i * chunkSize;
-    //			size_t end = (i == numThreads - 1) ? data.size() : start + chunkSize;
-    //			threads.emplace_back(processChunk, std::ref(data), start, end);
-    //		}
-
-    std::vector<std::pair<float, float>> result(datasetSize);
-
-    // MacOs windows have origin at bottom left, so don't flip coordinates
-    std::transform(
-        data.begin(), data.end(), result.begin(),
-        [this, plotBorderOffsets, xScale, &yPlotSpan,
-         yScale](const std::pair<float, float>& point) -> std::pair<float, float>
-        {
-            return {(((point.first - PlotZeroOffset.first) * xScale) + plotBorderOffsets.first),
-                    ((point.second - PlotZeroOffset.second) * yScale) + plotBorderOffsets.second};
-        });
-
-    return result;
-}
-void Plot2D::CocoaPlotImpl::DrawPlot(const int& newHeight, const int& newWidth)
-{
-    const std::pair<float, float> plotBorderOffsets = {newWidth * PLTBORDER_OFFSET_FACTOR,
-                                                       newHeight * PLTBORDER_OFFSET_FACTOR};
-    std::vector<std::pair<float, float>> plotPoints =
-        GetTransformedData(newWidth, newHeight, plotBorderOffsets);
-    SetPlotViewData(plotPoints);
-    DrawAxes(plotBorderOffsets);
-    [plotView draw];
+    w.SaveScreenshotAsPNG(title + "_" + w.GetTimestamp());
 }
 
-// void Plot2D::CocoaPlotImpl::ProcessChunk(std::vector<std::pair<float, float>>& result, size_t
-// start, size_t end, const std::pair<float, float>& plotSpan, const std::pair<float,float>& scalar)
-//{
-//	std::transform(data.begin(), data.end(), result.begin(),
-//				   [this, plotBorderOffsets, scalar, plotSpan](const
-// std::pair<float, float>& point) -> std::pair<float, float> {
-// return { (((point.first - PlotZeroOffset.first) * scalar.first) + plotBorderOffsets.first),
-// plotSpan.second - ((point.second
-//- PlotZeroOffset.second) * scalar.second) + plotBorderOffsets.second };
-//			}
-//		);
-// }
-void Plot2D::CocoaPlotImpl::OnResize(const int& newWidth, const int& newHeight)
-{
-    DrawPlot(newHeight, newWidth);
-}
-void Plot2D::CocoaPlotImpl::SetPlotViewData(const std::vector<std::pair<float, float>>& plotPoints)
-{
-    // Convert C++ vector for Objective-C
-    NSMutableArray<NSValue*>* dataArray = [NSMutableArray array];
-    for (const auto& point : plotPoints)
-    {
-        NSPoint nsPoint = NSMakePoint(point.first, point.second);
-        [dataArray addObject:[NSValue valueWithPoint:nsPoint]];
-    }
-
-    [plotView updateData:dataArray];
-}
-
-bool Plot2D::CocoaPlotImpl::BrowseForFolder(std::string& outFolder)
-{
-    // TODO: Implement
-    return true;
-}
-
-void Plot2D::CocoaPlotImpl::DrawTextAtPosition(int x, int y, const std::string& text)
-{
-    [plotView addText:[NSString stringWithUTF8String:text.c_str()] atPosition:NSMakePoint(x, y)];
-}
-
-void Plot2D::CocoaPlotImpl::DrawVerticalTextAtPosition(int x, int y, const std::string& text)
-{
-}
-
-void Plot2D::CocoaPlotImpl::DrawVerticalTick(const int tickCenterX, const int tickCenterY,
-                                             const float tickValue, const int tickLength)
-{
-    // Draw line
-    [plotView addLineFrom:NSMakePoint(tickCenterX, tickCenterY - tickLength)
-                       to:NSMakePoint(tickCenterX, tickCenterY + tickLength)];
-    // Add label
-    std::stringstream label;
-    label << std::setprecision(4) << tickValue;
-
-    [plotView addText:[NSString stringWithUTF8String:label.str().c_str()]
-           atPosition:NSMakePoint(tickCenterX - 10, fmax(tickCenterY - 30, 10))];
-}
-
-void Plot2D::CocoaPlotImpl::DrawHorizontalTick(const int tickCenterX, const int tickCenterY,
-                                               const float tickValue, const int tickLength)
-{
-    // Draw line
-    [plotView addLineFrom:NSMakePoint(tickCenterX - tickLength, tickCenterY)
-                       to:NSMakePoint(tickCenterX + tickLength, tickCenterY)];
-    // Add label
-    std::stringstream label;
-    label << std::setprecision(4) << tickValue;
-
-    NSDictionary* attributes = @{NSFontAttributeName : [NSFont systemFontOfSize:10]};
-    NSString* text = [NSString stringWithUTF8String:label.str().c_str()];
-
-    // Get the text size
-    NSSize textSize = [text sizeWithAttributes:attributes];
-    CGFloat textWidth = textSize.width;
-
-    [plotView addText:text
-           atPosition:NSMakePoint(fmax(10, tickCenterX - textWidth - tickLength - 8),
-                                  tickCenterY - 6)];
-}
-
-void Plot2D::CocoaPlotImpl::DrawAxes(const std::pair<float, float>& plotBorderOffsets)
-{
-    [plotView.lines removeAllObjects];
-    [plotView.textEntries removeAllObjects];
-    Rect2D windowRect(plotView.frame.size.height, 0, 0, plotView.frame.size.width);
-    const int leftBorderPos = static_cast<int>(plotBorderOffsets.first);
-    const int rightBorderPos = static_cast<int>(windowRect.right - plotBorderOffsets.first);
-    const int topBorderPos = static_cast<int>(windowRect.top - plotBorderOffsets.second);
-    const int bottomBorderPos = static_cast<int>(plotBorderOffsets.second);
-
-    // Draw the border
-    [plotView addLineFrom:NSMakePoint(leftBorderPos, bottomBorderPos)
-                       to:NSMakePoint(leftBorderPos, topBorderPos)];
-    [plotView addLineFrom:NSMakePoint(leftBorderPos, bottomBorderPos)
-                       to:NSMakePoint(rightBorderPos, bottomBorderPos)];
-
-    // Draw labels
-    // TODO: use plot props
-    DrawTextAtPosition(windowRect.right / 2, 20, xLabel);
-    DrawTextAtPosition(leftBorderPos / 4, windowRect.top / 2, yLabel);
-
-    // Draw X-axis ticks
-    int numTicksX = 4;
-    int x = 0;
-    float offset = PlotZeroOffset.first;
-    float increment = dataSpanX / (numTicksX + 1);
-    for (int i = 1; i <= numTicksX; ++i)
-    {
-        x = leftBorderPos + i * (rightBorderPos - leftBorderPos) / (numTicksX + 1);
-        offset += increment;
-        DrawVerticalTick(x, bottomBorderPos, offset, tickLength);
-    }
-    DrawVerticalTick(rightBorderPos, bottomBorderPos, offset + increment, tickLength);
-
-    // Draw Y-axis ticks
-    int numTicksY = 4;
-    int y = 0;
-    increment = dataSpanY / (numTicksY + 1);
-    offset = PlotZeroOffset.second;
-    for (int i = 1; i <= numTicksY; i++)
-    {
-        y = bottomBorderPos + i * ((topBorderPos - bottomBorderPos) / (numTicksY + 1));
-        offset += increment;
-        DrawHorizontalTick(leftBorderPos, y, offset, tickLength);
-    }
-    DrawHorizontalTick(leftBorderPos, topBorderPos, offset + increment, tickLength);
-}
-
-#endif
-#endif
-#pragma endregion
-
-template <typename T>
-void Plot2D::Plot(const std::vector<T>& x, const std::vector<T>& y, const std::string& title,
-                  const std::string& xLabel, const std::string& yLabel)
-{
-    assert(y.size() == x.size());
-
-    std::vector<std::pair<float, float>> points;
-    for (size_t i = 0; i < x.size(); ++i)
-    {
-        points.emplace_back(static_cast<float>(x[i]), static_cast<float>(y[i]));
-    }
-
-#ifdef _WIN32
-    PlotImpl_ = std::make_unique<Win32PlotImpl>(points, title, xLabel, yLabel);
-#elif defined(__APPLE__)
-#ifdef __OBJC__
-    PlotImpl_ = std::make_unique<CocoaPlotImpl>(points, title, xLabel, yLabel);
-#endif
-#elif defined(__linux__)
-    PlotImpl_ = std::make_unique<X11PlotImpl>(points, title, xLabel, yLabel);
-#else
-    std::throw(std::exception("Unsupported platform."));
-#endif
-
-    PlotImpl_->Show();
-
-    PlotImpl_.reset();
-}
-
-// Explicit template instantiation for common numeric types
-template void Plot2D::Plot<int>(const std::vector<int>& x, const std::vector<int>& y,
-                                const std::string& title, const std::string& xLabel,
-                                const std::string& yLabel);
-template void Plot2D::Plot<float>(const std::vector<float>& x, const std::vector<float>& y,
-                                  const std::string& title, const std::string& xLabel,
-                                  const std::string& yLabel);
-template void Plot2D::Plot<double>(const std::vector<double>& x, const std::vector<double>& y,
-                                   const std::string& title, const std::string& xLabel,
-                                   const std::string& yLabel);
-template void Plot2D::Plot<long>(const std::vector<long>& x, const std::vector<long>& y,
-                                 const std::string& title, const std::string& xLabel,
-                                 const std::string& yLabel);
-template void Plot2D::Plot<short>(const std::vector<short>& x, const std::vector<short>& y,
-                                  const std::string& title, const std::string& xLabel,
-                                  const std::string& yLabel);
-}  // namespace cxpplot
+}  // namespace cpplot2d
