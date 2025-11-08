@@ -362,9 +362,13 @@ struct Color
 class Plot2D
 {
    public:
-    template <typename T>
-    Plot2D(const std::vector<T>& x, const std::vector<T>& y, const std::string& title = "Plot",
+    Plot2D(const std::string& title = "Plot",
            const std::string& xLabel = "x", const std::string& yLabel = "y");
+
+    template <typename T>
+    Plot2D& AddLine(const std::vector<T>& x, const std::vector<T>& y, Color color = Color::Green());
+
+
 
     /**
      Show the plot with the pre-determined plot points and parameters.
@@ -380,13 +384,6 @@ class Plot2D
     void DisplayLegend(bool show);
 
     /**
-     Sets whether or not to enable multithreading for m_data processing.
-
-     @param enable enables multithreading if applicable
-     */
-    void SetMultithreadingEnabled(bool enable);
-
-    /**
      Sets the bottom limit for deferring window redraws until the window is idle. Decrease this
      value if resizing the window causes flickering.
 
@@ -397,6 +394,50 @@ class Plot2D
 
    protected:
     using Point = std::pair<int, int>;
+
+    template <typename T>
+    class ArrayView
+    {
+       public:
+        ArrayView() : m_data(nullptr), m_size(0)
+        {
+        }
+        ArrayView(const T* data, size_t size) : m_data(data), m_size(size)
+        {
+        }
+        template <typename Alloc>
+        ArrayView(const std::vector<T, Alloc>& v) : m_data(v.data()), m_size(v.size())
+        {
+        }
+
+        const T* data() const
+        {
+            return m_data;
+        }
+        size_t size() const
+        {
+            return m_size;
+        }
+        const T& operator[](size_t i) const
+        {
+            return m_data[i];
+        }
+
+       private:
+        const T* m_data;
+        size_t m_size;
+    };
+
+    class Series
+    {
+       public:
+        Series(ArrayView<float> xs, ArrayView<float> ys, Color color) : x(xs), y(ys), color(color)
+        {
+        }
+        ArrayView<float> x;
+        ArrayView<float> y;
+        Color color;
+    };
 
     struct WindowRect
     {
@@ -445,8 +486,6 @@ class Plot2D
         int size;
     };
 
-    // TODO: Can make this a Ployline that has a vector<points>
-    // that way we dont copy the color a million times for the same set of lines
     struct GuiPolyline
     {
        public:
@@ -580,20 +619,20 @@ class Plot2D
 
     static std::unique_ptr<IGraphicsContext> m_graphicsContext;
     std::unique_ptr<IWindow> m_window;
+    void UpdateOffsets(const std::vector<float>& x, const std::vector<float>& y);
     void OnMouseHoverCallback(IWindow& window, Point mousePos);
     void OnWindowResizeCallback(IWindow& window);
     void OnSaveButtonClicked(IWindow& window);
     void OnWindowResizeEndCallback(IWindow& window);
     std::pair<float, float> GetPlotBorderOffsets();
     void SetPlotBorderOffsets(std::pair<float, float> offsets);
-    std::pair<float, float> Plot2D::GetTransformedCoordinates(const int& x, const int& y,
+    std::pair<float, float> GetTransformedCoordinates(const int& x, const int& y,
                                                               const int windowWidth,
                                                               const int& windowHeight);
     void UpdatePlotWindowState(WindowState& windowState, IWindow& window);
     // Returns data points as polyline based on window sizes
     // TOOD: account for zoom here?
-    GuiPolyline GetDataPolyline(const std::vector<std::pair<float, float>>& data, Color color,
-                                IWindow& window);
+    GuiPolyline GetDataPolyline(const Series& series, IWindow& window);
 
     // Returns plot border as polyline
     GuiPolyline GetPlotBorderPolyline(IWindow& window, Color color);
@@ -604,8 +643,10 @@ class Plot2D
     std::pair<float, float> AbsToPlot(IWindow& window, const int x, const int y,
                                       const std::pair<float, float>& plotBorderOffset);
 
-    std::vector<std::pair<float, float>> m_data;
-    std::pair<float, float> PlotZeroOffset;
+    //std::vector<std::pair<float, float>> m_data;
+    std::vector<Series> m_series;
+    std::pair<float, float> PlotZeroOffset = {(std::numeric_limits<float>::max)(),
+                                              (std::numeric_limits<float>::max)()};
     std::pair<float, float> m_plotBorderOffsets;
     const float m_plotBorderOffsetFactor = 0.105;
     std::string xLabel;
@@ -613,11 +654,15 @@ class Plot2D
     std::string title;
     float dataSpanX = 0;
     float dataSpanY = 0;
-    size_t datasetSize = 0;
+    float largestX = -(std::numeric_limits<float>::max)(),
+          largestY = -(std::numeric_limits<float>::max)();
+    float smallestX = (std::numeric_limits<float>::max)(),
+          smallestY = (std::numeric_limits<float>::max)();
+    //size_t datasetSize = 0;
     const int tickLength = 4;
     const std::pair<int, int> minWindowSize = {200, 100};
     std::pair<int, int> defaultWindowSize = {800, 600};
-    int m_deferredResizeLimit = 1000000;
+    //int m_deferredResizeLimit = 1000000; // TODO: replace with downsampling (binning)
     int m_mouseCoordTextId;
     WindowState m_plotWindowState;
 
@@ -1191,62 +1236,9 @@ void Plot2D::Win32Window::Invalidate(const Plot2D::WindowState& windowState)
 
 std::unique_ptr<Plot2D::IGraphicsContext> Plot2D::m_graphicsContext = nullptr;
 
-template <typename T>
-Plot2D::Plot2D(const std::vector<T>& x, const std::vector<T>& y, const std::string& title,
-               const std::string& xLabel, const std::string& yLabel)
+Plot2D::Plot2D(const std::string& title, const std::string& xLabel, const std::string& yLabel)
     : xLabel(xLabel), yLabel(yLabel), title(title)
 {
-    // Check that x and y vectors are the same size and are numeric
-    static_assert(std::is_arithmetic<T>::value && !std::is_same<T, bool>::value,
-                  "Plot2D requires a numeric type for T (bool is not allowed)");
-
-    //assert(!x.empty() && !y.empty(), "");
-    assert(x.size() == y.size());
-
-    datasetSize = x.size();
-
-    for (size_t i = 0; i < datasetSize; ++i)
-    {
-        m_data.emplace_back(static_cast<float>(x[i]), static_cast<float>(y[i]));
-    }
-
-    
-    // Get largest and smallest points in dataset
-    std::pair<float, float> p;
-    float largestX = -(std::numeric_limits<float>::max)(),
-          largestY = -(std::numeric_limits<float>::max)();
-    float smallestX = (std::numeric_limits<float>::max)(),
-          smallestY = (std::numeric_limits<float>::max)();
-    for (int i = 0; i < datasetSize; i++)
-    {
-        p = m_data[i];
-        if (p.first > largestX)
-        {
-            largestX = p.first;
-        }
-        if (p.first < smallestX)
-        {
-            smallestX = p.first;
-        }
-        if (p.second > largestY)
-        {
-            largestY = p.second;
-        }
-        if (p.second < smallestY)
-        {
-            smallestY = p.second;
-        }
-    }
-
-    // The data span is the differnce between the largest and smallest points
-    dataSpanX = largestX - smallestX;
-    dataSpanY = largestY - smallestY;
-
-    // The conversion from data-space to plot-space requires both coord systems to start from (0,
-    // 0). These values will be used to adjust the m_data points during transformation to achieve
-    // this.
-    PlotZeroOffset.first = smallestX;
-    PlotZeroOffset.second = smallestY;
 
 #ifdef _WIN32
     m_graphicsContext = std::make_unique<Win32GraphicsContext>();
@@ -1268,18 +1260,70 @@ Plot2D::Plot2D(const std::vector<T>& x, const std::vector<T>& y, const std::stri
     m_window->AddMenuButton("File", "Save", [this]() { this->OnSaveButtonClicked(*m_window); });
 
     UpdatePlotWindowState(m_plotWindowState, *m_window);
+}
 
-   /* m_window->Invalidate(m_plotWindowState);
-    m_window->SetIsVisible(true);*/
+void Plot2D::UpdateOffsets(const std::vector<float>& x, const std::vector<float>& y)
+{
+    // Get largest and smallest points in dataset
+    std::pair<float, float> p;
+    int size = static_cast<int>(x.size());
+    for (int i = 0; i < size; i++)
+    {
+        p = { x[i], y[i]};
+        if (p.first > largestX)
+        {
+            largestX = p.first;
+        }
+        if (p.first < smallestX)
+        {
+            smallestX = p.first;
+        }
+        if (p.second > largestY)
+        {
+            largestY = p.second;
+        }
+        if (p.second < smallestY)
+        {
+            smallestY = p.second;
+        }
+    }
+
+    // The data span is the differnce between the largest and smallest points
+    dataSpanX = dataSpanX < (largestX - smallestX) ? largestX - smallestX : dataSpanX;
+    dataSpanY = dataSpanY < (largestY - smallestY) ? largestY - smallestY : dataSpanY;
+
+    // The conversion from data-space to plot-space requires both coord systems to start from (0,
+    // 0). These values will be used to adjust the m_data points during transformation to achieve
+    // this.
+    PlotZeroOffset.first = PlotZeroOffset.first > smallestX ? smallestX : PlotZeroOffset.first;
+    PlotZeroOffset.second = PlotZeroOffset.second > smallestY ? smallestY : PlotZeroOffset.second;
+}
+
+template <typename T>
+Plot2D& Plot2D::AddLine(const std::vector<T>& x, const std::vector<T>& y, Color color)
+{
+    // Check that x and y vectors are the same size and are numeric
+    static_assert(std::is_arithmetic<T>::value && !std::is_same<T, bool>::value,
+                  "Plot2D requires a numeric type for T (bool is not allowed)");
+    assert(x.size() == y.size());
+
+    m_series.emplace_back(x, y, color);
+    UpdateOffsets(x, y);  // Update plot offsets based on new data to make sure plot fits all data
+
+    return *this;
 }
 
 void Plot2D::UpdatePlotWindowState(Plot2D::WindowState& windowState, IWindow& window)
 {
     windowState.background = Color::Black();
     windowState.polylines.clear();
-    windowState.polylines.push_back(GetDataPolyline(
-        m_data, Color::Green(),
-        window));  // TODO: Make sure different plot types (scatter, bar, etc...) are supported
+    for (const Series& series : m_series)
+    {
+        windowState.polylines.push_back(GetDataPolyline(
+            series,
+            window));  // TODO: Make sure different plot types (scatter, bar, etc...) are supported
+    }
+   
     windowState.polylines.push_back(GetPlotBorderPolyline(window, Color::White()));
 
     std::pair<std::vector<GuiLine>, std::vector<GuiText>> ticks =
@@ -1407,8 +1451,7 @@ std::vector<Plot2D::GuiText> Plot2D::GetPlotLabels(IWindow& window, Color color)
     return labels;
 }
 
-Plot2D::GuiPolyline Plot2D::GetDataPolyline(const std::vector<std::pair<float, float>>& data,
-                                            Color color, IWindow& window)
+Plot2D::GuiPolyline Plot2D::GetDataPolyline(const Series& series, IWindow& window)
 {
     WindowRect rect = window.GetRect();
     const float xPlotSpan = rect.right - 2 * m_plotBorderOffsets.first;
@@ -1416,7 +1459,7 @@ Plot2D::GuiPolyline Plot2D::GetDataPolyline(const std::vector<std::pair<float, f
     const float xScale = xPlotSpan / dataSpanX;
     const float yScale = yPlotSpan / dataSpanY;
 
-    std::vector<Point> lines(datasetSize);  // Allocate enough spaces for dataset
+    std::vector<Point> lines(series.x.size());  // Allocate enough spaces for dataset
     std::vector<uint8_t> pixel_mask(rect.top * rect.right, 0);
     std::vector<Point> to_draw;
     to_draw.reserve(lines.size());
@@ -1425,9 +1468,9 @@ Plot2D::GuiPolyline Plot2D::GetDataPolyline(const std::vector<std::pair<float, f
     int x, y;
     Point transformedPoint;
     std::pair<float, float> point;
-    for (int i = 0; i < datasetSize; i++)
+    for (int i = 0; i < series.x.size(); i++)
     {
-        point = data[i];
+        point = {series.x[i], series.y[i]};
         transformedPoint = {static_cast<int>(((point.first - PlotZeroOffset.first) * xScale) +
                                              m_plotBorderOffsets.first),
                             static_cast<int>(((point.second - PlotZeroOffset.second) * yScale) +
@@ -1438,10 +1481,10 @@ Plot2D::GuiPolyline Plot2D::GetDataPolyline(const std::vector<std::pair<float, f
             pixel_mask[idx] = 1;
             to_draw.push_back(transformedPoint);
         }
-        //lines[i] = Point(x, y);
+        //lines[i] = transformedPoint;
     }
 
-    GuiPolyline polyline(to_draw, color);
+    GuiPolyline polyline(to_draw, series.color);
     return polyline;
 }
 
@@ -1491,11 +1534,10 @@ void Plot2D::OnWindowResizeCallback(IWindow& window)
     SetPlotBorderOffsets(std::pair<float, float>{size.first * m_plotBorderOffsetFactor,
                                                  size.second * m_plotBorderOffsetFactor});
 
-    if (datasetSize < m_deferredResizeLimit)
-    {
-        UpdatePlotWindowState(m_plotWindowState, *m_window);
-        window.Invalidate(m_plotWindowState);
-    }
+    // TODO: Use binning to reduce number of points drawn for large datasets
+    UpdatePlotWindowState(m_plotWindowState, *m_window);
+    window.Invalidate(m_plotWindowState);
+    
 }
 void Plot2D::OnWindowResizeEndCallback(IWindow& window)
 {

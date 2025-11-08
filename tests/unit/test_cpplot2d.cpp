@@ -11,6 +11,6 @@ TEST_CASE("Basic test", "[plot]")
         x[i] = static_cast<float>(i) * 0.1f;
         y[i] = static_cast<float>(i) * 0.1f;
     }
-    cpplot2d::Plot2D plot(x, y);
+    cpplot2d::Plot2D plot;
     CHECK(true);
 }

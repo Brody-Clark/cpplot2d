@@ -7,13 +7,19 @@ class Plot2DBenchmark : public cpplot2d::Plot2D
     public:
         Plot2DBenchmark(const std::vector<float>& x, const std::vector<float>& y,
                     const std::string& title = "Plot")
-        : cpplot2d::Plot2D(x, y, title)
+        : cpplot2d::Plot2D()
         {
         }
         Plot2D::GuiPolyline TestGetDataPolyline(const std::vector<std::pair<float, float>>& data,
             cpplot2d::Color color, IWindow& window)
         {
-            return GetDataPolyline(data, color, window);
+            Series series(
+                ArrayView<float>(reinterpret_cast<const float*>(data.data()), data.size()),
+                ArrayView<float>(reinterpret_cast<const float*>(
+                    reinterpret_cast<const char*>(data.data()) + sizeof(float)),
+                    data.size()),
+                color);
+            return GetDataPolyline(series, window);
         }
 
     // Minimal mock window implementing only what's required by GetDataPolyline
