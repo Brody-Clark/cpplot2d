@@ -21,8 +21,42 @@
 #include <functional>
 #include <vector>
 #include <iostream>
+
+// Enable by defining CPLOT2D_ENABLE_DEBUG (in CMake or project preprocessor defs)
+#define CPPLOT2D_ENABLE_DEBUG
+
+
 #ifdef _WIN32
 #include <windows.h>
+#endif
+
+// Enable by defining CPLOT2D_ENABLE_DEBUG (in CMake or project preprocessor defs)
+#ifdef CPPLOT2D_ENABLE_DEBUG
+
+// Print to stderr and, on Windows, send to the debugger output.
+#define CPPLOT2D_DEBUG(fmt, ...)                                                \
+    do {                                                                       \
+        std::fprintf(stderr, "[cpplot2d DEBUG] %s:%d:%s(): " fmt "\n",         \
+                     __FILE__, __LINE__, __func__, ##__VA_ARGS__);            \
+        std::fflush(stderr);                                                   \
+        /* also send to Visual Studio Output window */                         \
+        /* small, non-portable helper */                                       \
+        /* Note: OutputDebugString expects a wide string on Unicode builds; */ \
+        /* using ANSI here for simplicity (safe in most dev scenarios). */     \
+        /* If you need wide strings, convert fmt+args into a std::string. */  \
+        /* Keep this call optional to avoid depending on windows.h globally. */\
+        do {                                                                   \
+        } while (0);                                                           \
+    } while (0)
+
+#else
+
+// No-op in release builds
+#define CPPLOT2D_DEBUG(fmt, ...) ((void)0)
+
+#endif
+
+#ifdef _WIN32
 #include <commdlg.h>
 #include <gdiplus.h>  // This must be inlcuded after windows.h
 #include <shlobj.h>
@@ -305,6 +339,7 @@ extern NSString* const MouseMovedNotification = @"MouseMovedNotification";
 namespace cpplot2d
 {
 
+// Color struct representing RGBA color values.
 struct Color
 {
     uint8_t r = 0.f;
@@ -340,6 +375,14 @@ struct Color
         return {0, 0, 255};
     }
 
+    /**
+     Creates a Color from standard RGBA values.
+     @param red Red component (0-255)
+     @param green Green component (0-255)
+     @param blue Blue component (0-255)
+     @param alpha Alpha component (0-255), default is 255 (opaque)
+
+    */
     static constexpr Color FromRGB(int red, int green, int blue, int alpha = 255)
     {
         return {static_cast<uint8_t>(red), static_cast<uint8_t>(green), static_cast<uint8_t>(blue),
@@ -359,15 +402,36 @@ struct Color
         return r == other.r && g == other.g && b == other.b && a == other.a;
     }
 };
+
+// Plot appearance properties
+struct PlotProperties
+{
+   public:
+    Color backgroundColor = Color::Black();
+    Color borderColor = Color::White();
+    bool showLegend = true;
+    const int tickLineCount = 10;
+    int labelTextSpacing = 5;
+    const std::pair<int, int> minWindowSize = {200, 100};
+    const std::pair<int, int> defaultWindowSize = {800, 600};
+};
+
 class Plot2D
 {
    public:
-    Plot2D(const std::string& title = "Plot",
-           const std::string& xLabel = "x", const std::string& yLabel = "y");
+    Plot2D(const std::string& title = "Plot", const std::string& xLabel = "x",
+           const std::string& yLabel = "y", PlotProperties props = {});
 
+    /**
+     Adds a line series to the plot.
+     @tparam T Numeric type of the input data (e.g., float, double, int)
+     @param x Vector of x-coordinates
+     @param y Vector of y-coordinates
+     @param color Color of the line (default: green)
+     @param size Thickness of the line (default: 1)
+    * */
     template <typename T>
-    Plot2D& AddLine(const std::vector<T>& x, const std::vector<T>& y, Color color = Color::Green());
-
+    Plot2D& AddLine(const std::vector<T>& x, const std::vector<T>& y, Color color = Color::Green(), int size = 1);
 
 
     /**
@@ -395,6 +459,14 @@ class Plot2D
    protected:
     using Point = std::pair<int, int>;
 
+    // Text orientation
+    enum class Orientation : uint8_t
+    {
+        HORIZONTAL = 0,
+        VERTICAL = 1
+    };
+
+    // Lightweight view into an array. C++17 implementation of span.
     template <typename T>
     class ArrayView
     {
@@ -428,17 +500,64 @@ class Plot2D
         size_t m_size;
     };
 
+    // Data series
     class Series
     {
        public:
-        Series(ArrayView<float> xs, ArrayView<float> ys, Color color) : x(xs), y(ys), color(color)
+        Series(ArrayView<float> xs, ArrayView<float> ys) : x(xs), y(ys)
         {
         }
         ArrayView<float> x;
         ArrayView<float> y;
+    };
+
+    // Series for line plots
+    class LineSeries : public Series
+    {
+       public:
+        LineSeries(ArrayView<float> xs, ArrayView<float> ys, Color color, int size = 1)
+            : Series(xs, ys), size(size), color(color)
+        {
+        }
+        int size;
         Color color;
     };
 
+    // Series for scatter plots
+    class ScatterSeries : public Series
+    {
+       public:
+        ScatterSeries(ArrayView<float> xs, ArrayView<float> ys, Color color, int pointSize = 1)
+            : Series(xs, ys), pointSize(pointSize), color(color)
+        {
+        }
+        int pointSize;
+        Color color;
+    };
+    struct ScrollEvent
+    {
+       public:
+        double deltaX;  // positive = right
+        double deltaY;  // positive = up
+        bool precise;   // smooth scroll (true = from touchpad, false = wheel)
+        double scale;   // pixels per unit
+    };
+
+    /*
+     *    (left, top)
+     *     +-----------------+
+     *     |                 |
+     *     |                 |
+     *     |                 |
+     *     +-----------------+
+     *                 (right, bottom)
+     *
+     *  Notes:
+     *   - Constructor: WindowRect(top, left, right, bottom)
+     *   - Size() returns { width = right - left, height = top - bottom }
+     *   - This codebase uses a universal coordinate system where origin is at the
+     *     bottom-left for drawing logic
+    */
     struct WindowRect
     {
        public:
@@ -452,18 +571,13 @@ class Plot2D
             return {right - left, top - bottom};
         }
 
-        int top;
-        int left;
-        int right;
-        int bottom;
+        int top = 0;
+        int left = 0;
+        int right = 0;
+        int bottom = 0;
     };
 
-    enum class Orientation : uint8_t
-    {
-        HORIZONTAL = 0,
-        VERTICAL = 1
-    };
-
+    // Helper for generating unique IDs
     class IDGenerator
     {
        public:
@@ -474,18 +588,21 @@ class Plot2D
         }
     };
 
+    // Helper for creating file names
     class FileName
     {
        public:
         static std::string Create(const std::string& dir, const std::string& filename);
     };
 
-    struct GuiPoints
+    // Represents a single point to be drawn in the window
+    struct GuiPoint
     {
         Point p;
         int size;
     };
 
+    // Represents a polyline to be drawn in the window. More efficient than multiple lines.
     struct GuiPolyline
     {
        public:
@@ -497,6 +614,8 @@ class Plot2D
         Color color;
         int thickness;
     };
+
+    // Represents a single line to be drawn in the window
     struct GuiLine
     {
        public:
@@ -506,6 +625,8 @@ class Plot2D
         Point p1, p2;
         Color color;
     };
+
+    // Represents a text entry to be drawn in the window
     struct GuiText
     {
        public:
@@ -521,6 +642,8 @@ class Plot2D
         Color color = Color::White();
         Orientation orientation = Orientation::HORIZONTAL;
     };
+
+    // Represents a rectangle to be drawn in the window
     struct GuiRect
     {
         Point topLeft;
@@ -530,6 +653,7 @@ class Plot2D
         int borderWidth;
     };
 
+    // Represents a circle to be drawn in the window
     struct GuiCircle
     {
         Point center;
@@ -539,27 +663,20 @@ class Plot2D
         int borderWidth;
     };
 
-    struct GuiPolygon
-    {
-        std::vector<Point> vertices;
-        Color fillColor;
-        Color borderColor;
-        int borderWidth;
-    };
-
+    // Represents the entire state of the window to be drawn
     struct WindowState
     {
         std::vector<GuiText> text;
-        std::vector<GuiLine> lines;
-        std::vector<GuiPolyline> polylines;
-        std::vector<GuiPoints> points;
-        std::vector<GuiRect> rects;
-        std::vector<GuiCircle> circles;
-        std::vector<GuiPolygon> polygons;
+        std::vector<GuiLine> lines;           
+        std::vector<GuiPolyline> polylines; 
+        std::vector<GuiPoint> points;       
+        std::vector<GuiRect> rects;       
+        std::vector<GuiCircle> circles;     
         Color background;
         std::pair<int, int> minSize;
     };
 
+    // Interface for platform-specific window implementations
     class IWindow
     {
        public:
@@ -571,7 +688,7 @@ class Plot2D
                                 Color color = Color::White()) = 0;
 
         // Invalidates entire window, forcing a redraw
-        virtual void Invalidate(const WindowState& windowState) = 0;
+        virtual void Invalidate(std::shared_ptr<WindowState> windowState) = 0;
         virtual int GetAverageCharWidth() = 0;
         virtual void DrawWindowState() = 0;
 
@@ -581,6 +698,8 @@ class Plot2D
                                    std::function<void()> onClickCallback) = 0;
         virtual bool SaveScreenshotAsPNG(const std::string& fileName) = 0;
         virtual void SetIsVisible(bool isVisible) = 0;
+
+        // Returns a timestamp string for use in file names in the format YYYYMMDD_HHMMSS
         virtual std::string GetTimestamp() = 0;
         virtual WindowRect GetRect() = 0;
         virtual void RunEventLoop() = 0;
@@ -588,7 +707,10 @@ class Plot2D
         std::function<void()> OnResizeStartCallback;
         std::function<void()> OnResizeEndCallback;
         std::function<void()> OnResizeCallback;
+        std::function<void(ScrollEvent)> OnScrollWheelMoveCallback;
     };
+
+    // Interface for platform-specific graphics context implementations
     class IGraphicsContext
     {
        public:
@@ -599,22 +721,6 @@ class Plot2D
                                                             std::pair<int, int> minSize,
                                                             bool isVisible,
                                                             const std::string& title) = 0;
-
-       protected:
-        ULONG_PTR m_gdiplusToken;
-    };
-
-    // TODO: USE
-    struct PlotProperties
-    {
-        Color backgroundColor;
-        Color borderColor;
-        bool showLegend;
-        int tickLineCount;
-        int labelTextSpacing;
-        std::string plotTitle;
-        std::string plotXLabel;
-        std::string plotYLabel;
     };
 
     static std::unique_ptr<IGraphicsContext> m_graphicsContext;
@@ -623,16 +729,21 @@ class Plot2D
     void OnMouseHoverCallback(IWindow& window, Point mousePos);
     void OnWindowResizeCallback(IWindow& window);
     void OnSaveButtonClicked(IWindow& window);
+    void OnResetZoomButtonClicked(IWindow& window);
     void OnWindowResizeEndCallback(IWindow& window);
+    void OnScrollWheelMoveCallback(ScrollEvent wheelEvent, IWindow& window);
     std::pair<float, float> GetPlotBorderOffsets();
+    void SetViewportRect(const WindowRect& rect);
     void SetPlotBorderOffsets(std::pair<float, float> offsets);
+    std::pair<float, float> GetViewportToWindowScaleFactors(const int windowWidth, const int windowHeight);
+    std::pair<float, float> GetWindowToViewportScaleFactors(const int windowWidth, const int windowHeight);
     std::pair<float, float> GetTransformedCoordinates(const int& x, const int& y,
                                                               const int windowWidth,
                                                               const int& windowHeight);
-    void UpdatePlotWindowState(WindowState& windowState, IWindow& window);
+    void UpdatePlotWindowState(WindowState* windowState, IWindow& window);
     // Returns data points as polyline based on window sizes
     // TOOD: account for zoom here?
-    GuiPolyline GetDataPolyline(const Series& series, IWindow& window);
+    GuiPolyline GetDataPolyline(const LineSeries& series, IWindow& window);
 
     // Returns plot border as polyline
     GuiPolyline GetPlotBorderPolyline(IWindow& window, Color color);
@@ -640,15 +751,30 @@ class Plot2D
                                                                                  Color color);
     std::vector<GuiText> GetPlotLabels(IWindow& window, Color color);
 
-    std::pair<float, float> AbsToPlot(IWindow& window, const int x, const int y,
-                                      const std::pair<float, float>& plotBorderOffset);
-
-    //std::vector<std::pair<float, float>> m_data;
-    std::vector<Series> m_series;
+    struct m_dataSeries
+    {
+        std::vector<LineSeries> lines;
+        std::vector<ScatterSeries> points;
+    } m_dataSeries;
+    
     std::pair<float, float> PlotZeroOffset = {(std::numeric_limits<float>::max)(),
                                               (std::numeric_limits<float>::max)()};
-    std::pair<float, float> m_plotBorderOffsets;
-    const float m_plotBorderOffsetFactor = 0.105;
+    std::pair<float, float> m_plotBorderOffsets;    // TODO: REMOVE
+    WindowRect m_viewportRect = {0,0,0,0};               // current viewport in window space
+
+    // runtime view (what is currently shown). Defaults initialized when data is first added.
+    std::pair<float, float> m_viewZero = {0.0f, 0.0f};  // data-space lower-left of current view
+    float m_viewSpanX = 0.0f;                           // data-space width of current view
+    float m_viewSpanY = 0.0f;                           // data-space height of current view
+
+    // Whether to invalidate small region for mouse coords. 
+    // Useful to prevent invalidating more than once.
+    bool m_invalidateMouseCoordRegion = false;  
+
+    std::pair<float, float> m_defaultViewZero = {0.0f, 0.0f};
+    float m_defaultViewSpanX = 0.0f;
+    float m_defaultViewSpanY = 0.0f;
+    const float m_plotBorderOffsetFactor = 0.125;
     std::string xLabel;
     std::string yLabel;
     std::string title;
@@ -658,15 +784,13 @@ class Plot2D
           largestY = -(std::numeric_limits<float>::max)();
     float smallestX = (std::numeric_limits<float>::max)(),
           smallestY = (std::numeric_limits<float>::max)();
-    //size_t datasetSize = 0;
     const int tickLength = 4;
     const std::pair<int, int> minWindowSize = {200, 100};
     std::pair<int, int> defaultWindowSize = {800, 600};
-    //int m_deferredResizeLimit = 1000000; // TODO: replace with downsampling (binning)
-    int m_mouseCoordTextId;
-    WindowState m_plotWindowState;
+    PlotProperties m_plotProperties;
+    std::shared_ptr<WindowState> m_plotWindowState = std::make_shared<WindowState>();
 
-#ifdef _WIN32
+#ifdef _WIN32  // Windows-specific implementation
     class Win32GraphicsContext : public Plot2D::IGraphicsContext
     {
        public:
@@ -677,7 +801,10 @@ class Plot2D
                                                             std::pair<int, int> minSize,
                                                             bool isVisible,
                                                             const std::string& title) override;
+       protected:
+        ULONG_PTR m_gdiplusToken;
     };
+
     class Win32Window : public Plot2D::IWindow
     {
        public:
@@ -687,23 +814,27 @@ class Plot2D
         void DrawTextAt(const std::string text, int spacing, int size = 1, Point startPos = {0,0},
                         Orientation orientation = Orientation::HORIZONTAL, Color color = Color::White()) override;
         int GetAverageCharWidth() override;
+
+        // TODO: This is currently designed to treat each new menu button as a new menu.
+        // Modify to allow multiple buttons under same menu?
         void AddMenuButton(const std::string menu, const std::string label,
                            std::function<void()> onClickCallback) override;
         void SetIsVisible(bool isVisible) override;
-        void Invalidate(const WindowState& windowState) override;
+        void Invalidate(std::shared_ptr<WindowState> windowState) override;
         void DrawWindowState() override;
         std::string GetTimestamp() override;
         void RunEventLoop() override;
         void InvalidateRegion(const WindowRect& rect, const WindowState& windowState) override;
-        // LRESULT HandleMessage(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
         bool BrowseForFolder(std::string& outFolder);
         WindowRect GetRect() override;
         bool SaveScreenshotAsPNG(const std::string& fileName) override;
         static LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
 
        protected:
-        WindowState m_windowState;
+        std::shared_ptr<WindowState> m_windowState;
+        UINT m_wheelScrollLines;
         HWND m_hwnd;
+        HMENU m_hMenu;
         std::map<int, std::function<void()>> m_menuCommands;
 
         LRESULT HandleMessage(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
@@ -713,9 +844,11 @@ class Plot2D
         void DoDrawText(HDC hdc, GuiText text, RECT clientRect);
     };
 
-#elif defined(__linux__)
+#elif defined(__linux__) 
+    // Linux-specific implementation would go here
 
 #elif defined(__APPLE__)
+    // macOS-specific implementation would go here
 
 #endif
 
@@ -734,7 +867,6 @@ std::string Plot2D::FileName::Create(const std::string& dir, const std::string& 
 void Plot2D::Win32Window::RunEventLoop()
 {
     // Standard Win32 blocking message loop — exits when WindowProc posts PostQuitMessage
-    // (WM_DESTROY)
     MSG msg;
     while (GetMessage(&msg, nullptr, 0, 0) > 0)
     {
@@ -747,13 +879,11 @@ void Plot2D::Win32GraphicsContext::Init()
 {
     Gdiplus::GdiplusStartupInput gdiplusStartupInput;
     Gdiplus::GdiplusStartup(&m_gdiplusToken, &gdiplusStartupInput, NULL);
-
 }
 
 void Plot2D::Win32GraphicsContext::Shutdown()
 {
     Gdiplus::GdiplusShutdown(m_gdiplusToken);
- 
 }
 
 std::unique_ptr<Plot2D::IWindow> Plot2D::Win32GraphicsContext::MakeWindow(
@@ -785,27 +915,29 @@ Plot2D::Win32Window::Win32Window(std::pair<int, int> defaultWindowSize, std::pai
     m_hwnd = CreateWindowEx(0, TEXT("PlotWindowClass"), title.c_str(), WS_OVERLAPPEDWINDOW,
                             CW_USEDEFAULT, CW_USEDEFAULT, defaultWindowSize.first,
                             defaultWindowSize.second, NULL, NULL, GetModuleHandle(NULL), this);
-
+    
+    SystemParametersInfo(SPI_GETWHEELSCROLLLINES, 0, &m_wheelScrollLines, 0);
     if (!m_hwnd)
     {
         DWORD err = GetLastError();
         std::cout << "Failed to create window. Error: " << err << std::endl;
     }
+    m_hMenu = CreateMenu();
 }
+
 void Plot2D::Win32Window::AddMenuButton(const std::string menu, const std::string label,
                                         std::function<void()> onClickCallback)
 {
-    // Create the menu
-    HMENU hMenu = CreateMenu();
-    HMENU hFileMenu = CreateMenu();
+    HMENU hNewMenu = CreateMenu();
     int id = IDGenerator::Next();
-    AppendMenu(hFileMenu, MF_STRING, id, label.c_str());
-    AppendMenu(hMenu, MF_POPUP, (UINT_PTR)hFileMenu, menu.c_str());
+    AppendMenu(hNewMenu, MF_STRING, id, label.c_str());
+    AppendMenu(m_hMenu, MF_POPUP, (UINT_PTR)hNewMenu, menu.c_str());
 
-    SetMenu(m_hwnd, hMenu);
+    SetMenu(m_hwnd, m_hMenu);
 
     m_menuCommands.emplace(id, onClickCallback);
 }
+
 std::string Plot2D::Win32Window::GetTimestamp()
 {
     auto now = std::chrono::system_clock::now();
@@ -1059,6 +1191,21 @@ inline LRESULT Plot2D::Win32Window::HandleMessage(HWND hwnd, UINT uMsg, WPARAM w
             if (OnResizeCallback) OnResizeCallback();
             break;
         }
+        case WM_MOUSEWHEEL:
+        {
+            int delta = GET_WHEEL_DELTA_WPARAM(wParam);  // +/- 120 per notch
+            double pixelDelta = delta / 120.0 * m_wheelScrollLines * 16.0;  // rough conversion
+
+            ScrollEvent e;
+            e.deltaX = 0;
+            e.deltaY = -pixelDelta;
+            e.precise = false;
+            e.scale = 1.0;
+
+            if (OnScrollWheelMoveCallback) OnScrollWheelMoveCallback(e);
+
+            break;
+        }
         case WM_COMMAND:
         {
             int wmId = LOWORD(wParam);
@@ -1073,7 +1220,7 @@ inline LRESULT Plot2D::Win32Window::HandleMessage(HWND hwnd, UINT uMsg, WPARAM w
         }
         case WM_GETMINMAXINFO:
         {
-            std::pair<int, int> sizes = m_windowState.minSize;
+            std::pair<int, int> sizes = m_windowState->minSize;
             MINMAXINFO* minMaxInfo = (MINMAXINFO*)lParam;
             minMaxInfo->ptMinTrackSize.x = sizes.first;
             minMaxInfo->ptMinTrackSize.y = sizes.second;
@@ -1118,7 +1265,7 @@ void Plot2D::Win32Window::DrawTextAt(const std::string text, int spacing, int si
                                      Orientation orientation,
                                      Color color)
 {
-    m_windowState.text.push_back(GuiText(text, startPos, spacing, color, orientation));
+    m_windowState->text.push_back(GuiText(text, startPos, spacing, color, orientation));
 }
 void Plot2D::Win32Window::DoDrawText(HDC hdc, GuiText text, RECT clientRect)
 {
@@ -1136,7 +1283,7 @@ void Plot2D::Win32Window::DrawWindowState()
     HDC hdc = BeginPaint(m_hwnd, &ps);
 
     // Fill background
-    HBRUSH blackBrush = CreateSolidBrush(ToWin32Color(m_windowState.background));
+    HBRUSH blackBrush = CreateSolidBrush(ToWin32Color(m_windowState->background));
     FillRect(hdc, &rect, blackBrush);
     DeleteObject(blackBrush);
 
@@ -1144,7 +1291,7 @@ void Plot2D::Win32Window::DrawWindowState()
     std::map<Color, HPEN> brushes;  // HPEN hashmap
     HPEN hpen = nullptr;
     std::map<Color, HPEN>::iterator it;
-    for (GuiPolyline polyline : m_windowState.polylines)
+    for (GuiPolyline polyline : m_windowState->polylines)
     {
         // Get brush for current line from hashmap or add new mapping
         it = brushes.find(polyline.color);
@@ -1159,6 +1306,8 @@ void Plot2D::Win32Window::DrawWindowState()
         }
 
         int size = polyline.points.size();
+        if (size <= 0) continue;
+
         SelectObject(hdc, hpen);
 
         // Draw initial point, then LineTo the rest
@@ -1171,7 +1320,7 @@ void Plot2D::Win32Window::DrawWindowState()
     }
 
     // Draw Lines
-    for (GuiLine line : m_windowState.lines)
+    for (GuiLine line : m_windowState->lines)
     {
         // Get brush for current line from hashmap or add new mapping
 
@@ -1194,7 +1343,7 @@ void Plot2D::Win32Window::DrawWindowState()
     }
 
     // Draw Text
-    for (GuiText text : m_windowState.text)
+    for (GuiText text : m_windowState->text)
     {
         DoDrawText(hdc, text, rect);
     }
@@ -1212,19 +1361,22 @@ void Plot2D::Win32Window::DrawWindowState()
 void Plot2D::Win32Window::InvalidateRegion(const Plot2D::WindowRect& windowRect,
                                            const Plot2D::WindowState& windowState)
 {
-    m_windowState = windowState;
+    m_windowState = std::make_shared<WindowState>(windowState);
     RECT win32Rect;
     GetClientRect(m_hwnd, &win32Rect);
 
     // Universal coords assume origin at bottom left and extend up. Win32 is the opposite
     const RECT rect = {windowRect.left, win32Rect.bottom - windowRect.top, windowRect.right,
                        win32Rect.bottom - windowRect.bottom};
+    CPPLOT2D_DEBUG("Invalidating Region %i %i %i %i", rect.top, rect.left, rect.bottom, rect.right);
     InvalidateRect(m_hwnd, &rect, FALSE);
 }
 
-void Plot2D::Win32Window::Invalidate(const Plot2D::WindowState& windowState)
+void Plot2D::Win32Window::Invalidate(std::shared_ptr<Plot2D::WindowState> windowState)
 {
     m_windowState = windowState;
+    CPPLOT2D_DEBUG("Invalidating");
+
     InvalidateRect(m_hwnd, nullptr, FALSE);
 }
 
@@ -1236,8 +1388,8 @@ void Plot2D::Win32Window::Invalidate(const Plot2D::WindowState& windowState)
 
 std::unique_ptr<Plot2D::IGraphicsContext> Plot2D::m_graphicsContext = nullptr;
 
-Plot2D::Plot2D(const std::string& title, const std::string& xLabel, const std::string& yLabel)
-    : xLabel(xLabel), yLabel(yLabel), title(title)
+Plot2D::Plot2D(const std::string& title, const std::string& xLabel, const std::string& yLabel, PlotProperties props)
+    : xLabel(xLabel), yLabel(yLabel), title(title), m_plotProperties(props)
 {
 
 #ifdef _WIN32
@@ -1257,9 +1409,11 @@ Plot2D::Plot2D(const std::string& title, const std::string& xLabel, const std::s
     m_window->OnMouseHoverCallback = [this](Point p) { this->OnMouseHoverCallback(*m_window, p); };
     m_window->OnResizeCallback = [this]() { this->OnWindowResizeCallback(*m_window); };
     m_window->OnResizeEndCallback = [this]() { this->OnWindowResizeEndCallback(*m_window); };
+    m_window->OnScrollWheelMoveCallback = [this](ScrollEvent e) { this->OnScrollWheelMoveCallback(e, *m_window); };
     m_window->AddMenuButton("File", "Save", [this]() { this->OnSaveButtonClicked(*m_window); });
+    m_window->AddMenuButton("View", "Reset Zoom", [this]() { this->OnResetZoomButtonClicked(*m_window); });
 
-    UpdatePlotWindowState(m_plotWindowState, *m_window);
+    UpdatePlotWindowState(m_plotWindowState.get(), *m_window);
 }
 
 void Plot2D::UpdateOffsets(const std::vector<float>& x, const std::vector<float>& y)
@@ -1269,72 +1423,69 @@ void Plot2D::UpdateOffsets(const std::vector<float>& x, const std::vector<float>
     int size = static_cast<int>(x.size());
     for (int i = 0; i < size; i++)
     {
-        p = { x[i], y[i]};
-        if (p.first > largestX)
-        {
-            largestX = p.first;
-        }
-        if (p.first < smallestX)
-        {
-            smallestX = p.first;
-        }
-        if (p.second > largestY)
-        {
-            largestY = p.second;
-        }
-        if (p.second < smallestY)
-        {
-            smallestY = p.second;
-        }
+        p = {x[i], y[i]};
+        if (p.first > largestX) largestX = p.first;
+        if (p.first < smallestX) smallestX = p.first;
+        if (p.second > largestY) largestY = p.second;
+        if (p.second < smallestY) smallestY = p.second;
     }
 
     // The data span is the differnce between the largest and smallest points
-    dataSpanX = dataSpanX < (largestX - smallestX) ? largestX - smallestX : dataSpanX;
-    dataSpanY = dataSpanY < (largestY - smallestY) ? largestY - smallestY : dataSpanY;
+    dataSpanX = max((largestX - smallestX), dataSpanX);
+    dataSpanY = max((largestY - smallestY), dataSpanY);
 
     // The conversion from data-space to plot-space requires both coord systems to start from (0,
     // 0). These values will be used to adjust the m_data points during transformation to achieve
     // this.
-    PlotZeroOffset.first = PlotZeroOffset.first > smallestX ? smallestX : PlotZeroOffset.first;
-    PlotZeroOffset.second = PlotZeroOffset.second > smallestY ? smallestY : PlotZeroOffset.second;
+    PlotZeroOffset.first = min(PlotZeroOffset.first, smallestX);
+    PlotZeroOffset.second = min(PlotZeroOffset.second, smallestY);
+
+    m_viewZero = PlotZeroOffset;
+    m_viewSpanX = dataSpanX > 0.0f ? dataSpanX : 1.0f;
+    m_viewSpanY = dataSpanY > 0.0f ? dataSpanY : 1.0f;
+
+    m_defaultViewZero = m_viewZero;
+    m_defaultViewSpanX = m_viewSpanX;
+    m_defaultViewSpanY = m_viewSpanY;
+ 
 }
 
 template <typename T>
-Plot2D& Plot2D::AddLine(const std::vector<T>& x, const std::vector<T>& y, Color color)
+Plot2D& Plot2D::AddLine(const std::vector<T>& x, const std::vector<T>& y, Color color, int size)
 {
     // Check that x and y vectors are the same size and are numeric
     static_assert(std::is_arithmetic<T>::value && !std::is_same<T, bool>::value,
                   "Plot2D requires a numeric type for T (bool is not allowed)");
     assert(x.size() == y.size());
 
-    m_series.emplace_back(x, y, color);
+    m_dataSeries.lines.emplace_back(x, y, color, size);
     UpdateOffsets(x, y);  // Update plot offsets based on new data to make sure plot fits all data
 
     return *this;
 }
 
-void Plot2D::UpdatePlotWindowState(Plot2D::WindowState& windowState, IWindow& window)
+void Plot2D::UpdatePlotWindowState(Plot2D::WindowState* windowState, IWindow& window)
 {
-    windowState.background = Color::Black();
-    windowState.polylines.clear();
-    for (const Series& series : m_series)
+    windowState->background = Color::Black();
+    windowState->polylines.clear();
+    for (const LineSeries& series : m_dataSeries.lines)
     {
-        windowState.polylines.push_back(GetDataPolyline(
+        windowState->polylines.push_back(GetDataPolyline(
             series,
-            window));  // TODO: Make sure different plot types (scatter, bar, etc...) are supported
+            window));
     }
    
-    windowState.polylines.push_back(GetPlotBorderPolyline(window, Color::White()));
+    windowState->polylines.push_back(GetPlotBorderPolyline(window, Color::White()));
 
     std::pair<std::vector<GuiLine>, std::vector<GuiText>> ticks =
         GetPlotBorderTickLines(window, Color::White());
-    windowState.lines.clear();
-    windowState.text.clear();
-    windowState.lines.insert(windowState.lines.end(), ticks.first.begin(), ticks.first.end());
-    windowState.text.insert(windowState.text.end(), ticks.second.begin(), ticks.second.end());
+    windowState->lines.clear();
+    windowState->text.clear();
+    windowState->lines.insert(windowState->lines.end(), ticks.first.begin(), ticks.first.end());
+    windowState->text.insert(windowState->text.end(), ticks.second.begin(), ticks.second.end());
 
     std::vector<GuiText> labels = GetPlotLabels(window, Color::White());
-    windowState.text.insert(windowState.text.end(), labels.begin(), labels.end());
+    windowState->text.insert(windowState->text.end(), labels.begin(), labels.end());
 }
 
 Plot2D::GuiPolyline Plot2D::GetPlotBorderPolyline(IWindow& window, Color color)
@@ -1374,9 +1525,9 @@ Plot2D::GetPlotBorderTickLines(IWindow& window, Color color)
     // Draw X-axis ticks
     int numTicksX = 4;
     int x = 0;
-    float offset = PlotZeroOffset.first;
+    float offset = m_viewZero.first;
     int tickInterval = (rightBorderPos - leftBorderPos) / (numTicksX + 1);
-    float increment = dataSpanX / (numTicksX + 1);
+    float increment = m_viewSpanY / (numTicksX + 1);
     for (int i = 1; i <= numTicksX; ++i)
     {
         x = leftBorderPos + i * tickInterval;
@@ -1388,14 +1539,14 @@ Plot2D::GetPlotBorderTickLines(IWindow& window, Color color)
 
         // Add tick label
         label.str("");
-        label << std::setprecision(4) << offset;
+        label << std::setprecision(3) << offset;
         labels.push_back(GuiText(label.str(), {x - 10, max(bottomBorderPos - 10, rect.bottom + 20)},
                                  1, color, Orientation::HORIZONTAL));
     }
     ticks.push_back(GuiLine({rightBorderPos, bottomBorderPos + tickLength},
                             {rightBorderPos, bottomBorderPos - tickLength}, color));
     label.str("");
-    label << std::setprecision(4) << offset + increment;
+    label << std::setprecision(3) << offset + increment;
     labels.push_back(GuiText(label.str(),
                              {rightBorderPos - 10, max(bottomBorderPos - 10, rect.bottom + 20)}, 1,
                              color, Orientation::HORIZONTAL));
@@ -1403,8 +1554,8 @@ Plot2D::GetPlotBorderTickLines(IWindow& window, Color color)
     // Draw Y-axis ticks
     int numTicksY = 4;
     int y = 0;
-    increment = dataSpanY / (numTicksY + 1);
-    offset = PlotZeroOffset.second;
+    increment = m_viewSpanY / (numTicksY + 1);
+    offset = m_viewZero.second;
     tickInterval = (topBorderPos - bottomBorderPos) / (numTicksY + 1);
     int avgCharWidth = window.GetAverageCharWidth();
     for (int i = 1; i <= numTicksY; i++)
@@ -1418,19 +1569,19 @@ Plot2D::GetPlotBorderTickLines(IWindow& window, Color color)
 
         // Add tick label
         label.str("");
-        label << std::setprecision(4) << offset;
+        label << std::setprecision(3) << offset;
         labels.push_back(GuiText(
             label.str(),
-            {(int)max(10, leftBorderPos - avgCharWidth * (label.str().size() + 1) - tickLength), y - 4},
+            {(int)max(10, leftBorderPos - avgCharWidth * (label.str().size() + 1) - tickLength), y - 2},
             1, color, Orientation::HORIZONTAL));
     }
     ticks.push_back(GuiLine({leftBorderPos - tickLength, topBorderPos},
                             {leftBorderPos + tickLength, topBorderPos}, color));
     label.str("");
-    label << std::setprecision(4) << offset;
+    label << std::setprecision(3) << offset;
     labels.push_back(GuiText(
         label.str(),
-        {(int)max(10, leftBorderPos - avgCharWidth * (label.str().size() + 1) - tickLength), topBorderPos - 4}, 1,
+        {(int)max(10, leftBorderPos - avgCharWidth * (label.str().size() + 1) - tickLength), topBorderPos - 2}, 1,
         color, Orientation::HORIZONTAL));
 
     return {ticks, labels};
@@ -1443,75 +1594,76 @@ std::vector<Plot2D::GuiText> Plot2D::GetPlotLabels(IWindow& window, Color color)
     std::vector<GuiText> labels{3};
     labels[0] = GuiText(xLabel, Point(rect.right / 2, rect.bottom + 20), 1, color,
                         Orientation::HORIZONTAL);  // X-axis label
-    labels[1] = GuiText(yLabel, Point(rect.left + 20, rect.top / 2), 1, color,
+    labels[1] = GuiText(yLabel, Point(rect.left + 10, rect.top / 2), 1, color,
                         Orientation::VERTICAL);  // Y-axis label
     labels[2] = GuiText(title, Point(rect.right / 2, rect.top - 10), 1, color,
                         Orientation::HORIZONTAL);  // Plot title
 
     return labels;
 }
+inline std::pair<float, float> Plot2D::GetViewportToWindowScaleFactors(const int windowWidth, const int windowHeight)
+{
+    const float xPlotSpan = windowWidth - 2 * m_plotBorderOffsets.first;
+    const float yPlotSpan = windowHeight - 2 * m_plotBorderOffsets.second;
 
-Plot2D::GuiPolyline Plot2D::GetDataPolyline(const Series& series, IWindow& window)
+    const float viewSpanX = (m_viewSpanX > 0.0f) ? m_viewSpanX : 1.0f;
+    const float viewSpanY = (m_viewSpanY > 0.0f) ? m_viewSpanY : 1.0f;
+
+    float xScale = viewSpanX / xPlotSpan;
+    float yScale = viewSpanY / yPlotSpan;
+    return {xScale, yScale};
+}
+inline std::pair<float, float> Plot2D::GetWindowToViewportScaleFactors(const int windowWidth,
+                                                                       const int windowHeight)
+{
+    const float xPlotSpan = windowWidth - 2 * m_plotBorderOffsets.first;
+    const float yPlotSpan = windowHeight - 2 * m_plotBorderOffsets.second;
+
+    const float viewSpanX = (m_viewSpanX > 0.0f) ? m_viewSpanX : 1.0f;
+    const float viewSpanY = (m_viewSpanY > 0.0f) ? m_viewSpanY : 1.0f;
+
+    float xScale = xPlotSpan / viewSpanX;
+    float yScale = yPlotSpan / viewSpanY;
+    return {xScale, yScale};
+}
+
+Plot2D::GuiPolyline Plot2D::GetDataPolyline(const LineSeries& series, IWindow& window)
 {
     WindowRect rect = window.GetRect();
-    const float xPlotSpan = rect.right - 2 * m_plotBorderOffsets.first;
-    const float yPlotSpan = rect.top - 2 * m_plotBorderOffsets.second;
-    const float xScale = xPlotSpan / dataSpanX;
-    const float yScale = yPlotSpan / dataSpanY;
+    std::pair<float, float> scales = GetWindowToViewportScaleFactors(rect.right, rect.top);
 
-    std::vector<Point> lines(series.x.size());  // Allocate enough spaces for dataset
     std::vector<uint8_t> pixel_mask(rect.top * rect.right, 0);
     std::vector<Point> to_draw;
-    to_draw.reserve(lines.size());
+    to_draw.reserve(series.x.size());
 
     size_t idx;
-    int x, y;
     Point transformedPoint;
     std::pair<float, float> point;
     for (int i = 0; i < series.x.size(); i++)
     {
         point = {series.x[i], series.y[i]};
-        transformedPoint = {static_cast<int>(((point.first - PlotZeroOffset.first) * xScale) +
+        transformedPoint = {static_cast<int>(((point.first - m_viewZero.first) * scales.first) +
                                              m_plotBorderOffsets.first),
-                            static_cast<int>(((point.second - PlotZeroOffset.second) * yScale) +
+                            static_cast<int>(((point.second - m_viewZero.second) * scales.second) +
                                              m_plotBorderOffsets.second)};
+
+        // Bounds-check index before writing mask
+        if (transformedPoint.first < m_viewportRect.left || transformedPoint.first >= m_viewportRect.right ||
+            transformedPoint.second < m_viewportRect.bottom || transformedPoint.second >= m_viewportRect.top)
+            continue;
+
+        // Check if pixel already set in mask. If not, add to draw list and set mask
         idx = transformedPoint.second * rect.right + transformedPoint.first;
         if (!pixel_mask[idx])
         {
             pixel_mask[idx] = 1;
-            to_draw.push_back(transformedPoint);
+            to_draw.emplace_back(transformedPoint);
         }
-        //lines[i] = transformedPoint;
     }
 
-    GuiPolyline polyline(to_draw, series.color);
-    return polyline;
+    return GuiPolyline(to_draw, series.color);
 }
 
-std::pair<float, float> Plot2D::AbsToPlot(IWindow& window, const int x, const int y,
-                                          const std::pair<float, float>& plotBorderOffset)
-{
-    WindowRect rect = window.GetRect();
-    if ((x >= plotBorderOffset.first && x <= rect.right - plotBorderOffset.first) &&
-        (y >= plotBorderOffset.second && y <= rect.bottom - plotBorderOffset.second))
-    {
-        // Scale absolute mouse coordinates to plot window space
-        const float xPlotSpan = (rect.right - rect.left) - 2 * plotBorderOffset.first;
-        const float yPlotSpan = (rect.top - rect.bottom) - 2 * plotBorderOffset.second;
-        float xScale = dataSpanX / xPlotSpan;
-        float yScale = dataSpanY / yPlotSpan;
-
-        // In win32 windows, (0,0) is upper left corner, so Y needs to be reversed
-        return std::pair<float, float>(
-            (x - plotBorderOffset.first) * xScale + PlotZeroOffset.first,
-            ((yPlotSpan - y + plotBorderOffset.second) * yScale + PlotZeroOffset.second));
-    }
-    else
-    {
-        // Outside the plot window just default to (0,0)
-        return std::pair<float, float>(0.0f, 0.0f);
-    }
-}
 void Plot2D::Show(bool block)
 {
     m_window->SetIsVisible(true);
@@ -1526,16 +1678,22 @@ void Plot2D::SetPlotBorderOffsets(std::pair<float, float> offsets)
 {
     m_plotBorderOffsets = offsets;
 }
+void Plot2D::SetViewportRect(const WindowRect& rect)
+{
+    m_viewportRect = rect;
+}
 
 void Plot2D::OnWindowResizeCallback(IWindow& window)
 {
     std::pair<int, int> size = window.GetRect().Size();
-
+    float verticalOffset = size.second * m_plotBorderOffsetFactor;
+    float horizontalOffset = size.first * m_plotBorderOffsetFactor;
     SetPlotBorderOffsets(std::pair<float, float>{size.first * m_plotBorderOffsetFactor,
                                                  size.second * m_plotBorderOffsetFactor});
-
+    SetViewportRect(WindowRect(size.second - verticalOffset, horizontalOffset,
+                               size.first - horizontalOffset, verticalOffset));
     // TODO: Use binning to reduce number of points drawn for large datasets
-    UpdatePlotWindowState(m_plotWindowState, *m_window);
+    UpdatePlotWindowState(m_plotWindowState.get(), *m_window);
     window.Invalidate(m_plotWindowState);
     
 }
@@ -1543,27 +1701,67 @@ void Plot2D::OnWindowResizeEndCallback(IWindow& window)
 {
     std::pair<int, int> size = window.GetRect().Size();
 
+    float verticalOffset = size.second * m_plotBorderOffsetFactor;
+    float horizontalOffset = size.first * m_plotBorderOffsetFactor;
     SetPlotBorderOffsets(std::pair<float, float>{size.first * m_plotBorderOffsetFactor,
                                                  size.second * m_plotBorderOffsetFactor});
-    UpdatePlotWindowState(m_plotWindowState, *m_window);
+    SetViewportRect(WindowRect(size.second - verticalOffset, horizontalOffset,
+                               size.first - horizontalOffset, verticalOffset));
+    UpdatePlotWindowState(m_plotWindowState.get(), *m_window);
     window.Invalidate(m_plotWindowState);
 }
+void Plot2D::OnScrollWheelMoveCallback(ScrollEvent wheelEvent, IWindow& window)
+{
+    // Temporarily disable mouse hover to avoid blanking during next update
+    m_window->OnMouseHoverCallback = nullptr;
 
-// TODO: Refactor
+    // Choose a sensible sensitivity; make it small so wheel gives smooth zoom.
+    const double sensitivity = 0.0015;  // tweak as desired
+    double factor = std::exp(wheelEvent.deltaY * sensitivity);
+
+    // Clamp factor to avoid extreme jumps
+    if (factor < 0.1) factor = 0.1;
+    if (factor > 10.0) factor = 10.0;
+
+    // View center in data coords
+    float centerX = m_viewZero.first + m_viewSpanX * 0.5f;
+    float centerY = m_viewZero.second + m_viewSpanY * 0.5f;
+
+    // New spans
+    float newSpanX = static_cast<float>(m_viewSpanX * factor);
+    float newSpanY = static_cast<float>(m_viewSpanY * factor);
+
+    // Optionally clamp minimal span to avoid divide-by-zero / overzoom
+    const float minSpan = 1e-6f;
+    if (newSpanX < minSpan) newSpanX = minSpan;
+    if (newSpanY < minSpan) newSpanY = minSpan;
+
+    // Recenter view around same center
+    m_viewZero.first = centerX - newSpanX * 0.5f;
+    m_viewZero.second = centerY - newSpanY * 0.5f;
+    m_viewSpanX = newSpanX;
+    m_viewSpanY = newSpanY;
+
+    // Update and redraw
+    UpdatePlotWindowState(m_plotWindowState.get(), *m_window);
+    window.Invalidate(m_plotWindowState);
+
+    // Re-enable mouse hover
+    m_window->OnMouseHoverCallback = [this](Point p) { this->OnMouseHoverCallback(*m_window, p); };
+}
+
 std::pair<float, float> Plot2D::GetTransformedCoordinates(const int& x, const int& y,
                                                                          const int windowWidth,
                                                                          const int& windowHeight)
 {
-    // Scale absolute coordinates to plot window space
-    const float xPlotSpan = windowWidth - 2 * m_plotBorderOffsets.first;
-    const float yPlotSpan = windowHeight - 2 * m_plotBorderOffsets.second;
-    float xScale = dataSpanX / xPlotSpan;
-    float yScale = dataSpanY / yPlotSpan;
+    std::pair<float, float> scales = GetViewportToWindowScaleFactors(windowWidth, windowHeight);
+    auto coordinates =  std::pair<float, float>(
+        (x - m_plotBorderOffsets.first) * scales.first + m_viewZero.first,
+        ((y - m_plotBorderOffsets.second) * scales.second + m_viewZero.second));
 
-    return std::pair<float, float>(
-        (x - m_plotBorderOffsets.first) * xScale + PlotZeroOffset.first,
-        ((y - m_plotBorderOffsets.second) * yScale + PlotZeroOffset.second));
+    return coordinates;
 }
+
 void Plot2D::OnMouseHoverCallback(IWindow& w, Point mousePos)
 {
     std::pair<float, float> plotBorderOffsets = GetPlotBorderOffsets();
@@ -1573,29 +1771,35 @@ void Plot2D::OnMouseHoverCallback(IWindow& w, Point mousePos)
                   (mousePos.second >= plotBorderOffsets.second &&
                    mousePos.second <= (rect.Size().second) - plotBorderOffsets.second);
 
-    auto transformedCoords = GetTransformedCoordinates(mousePos.first, mousePos.second,
-                                                       rect.Size().first, rect.Size().second);
-    std::string coordText = "X: " + std::to_string(transformedCoords.first) +
-                            " Y: " + std::to_string(transformedCoords.second);
+    // Start mouse coordinate text at top left corner with small offset
+    int x = rect.left + 5;
+    int y = rect.top - 2;
 
-    // Start mouse coordinate text at top left & 1 unit from top
-    int x = rect.left;
-    int y = rect.top - 1;
+    // Mouse coordinates should fit inside a rect that starts at the top left corner and extends
+    // 250 wide and 30 high
+    WindowRect mouseCoordinateRect(rect.top, rect.left, rect.left + 250, rect.top - 30); 
 
-    // mouse coordinates should fit inside a rect that starts at the top left corner and extends 200
-    // wide and 30 high
-    WindowRect mouseCoordinateRect(rect.top, rect.left, rect.left + 200,
-                                   rect.top - 30);  // TODO: validate
     if (inside)
     {
+        auto transformedCoords = GetTransformedCoordinates(mousePos.first, mousePos.second,
+                                                           rect.Size().first, rect.Size().second);
+
+        char buf[64];
+        int n = _snprintf_s(buf, sizeof(buf), _TRUNCATE, "(X, Y) = (%.3g, %.3g)",
+                            transformedCoords.first, transformedCoords.second);
+        std::string coordText(buf, n > 0 ? n : 0);
+        
         WindowState mouseCoordinates;
         mouseCoordinates.text = {
             GuiText(coordText, Point(x, y), 1, Color::White(), Orientation::HORIZONTAL)};
         mouseCoordinates.background = Color::Black();
         w.InvalidateRegion(mouseCoordinateRect, mouseCoordinates);
+        m_invalidateMouseCoordRegion = true;
     }
-    else
+    else if (m_invalidateMouseCoordRegion)
     {
+        // Clear previous mouse coordinate region only once when mouse leaves plot area
+        m_invalidateMouseCoordRegion = false;
         WindowState empty;
         empty.background = Color::Black();
         w.InvalidateRegion(mouseCoordinateRect, empty);
@@ -1605,6 +1809,22 @@ void Plot2D::OnMouseHoverCallback(IWindow& w, Point mousePos)
 void Plot2D::OnSaveButtonClicked(IWindow& w)
 {
     w.SaveScreenshotAsPNG(title + "_" + w.GetTimestamp());
+}
+void Plot2D::OnResetZoomButtonClicked(IWindow& w)
+{
+    // Temporarily disable mouse hover to avoid blanking during next update
+    m_window->OnMouseHoverCallback = nullptr;
+
+    // Restore saved defaults
+    m_viewZero = m_defaultViewZero;
+    m_viewSpanX = m_defaultViewSpanX;
+    m_viewSpanY = m_defaultViewSpanY;
+
+    UpdatePlotWindowState(m_plotWindowState.get(), *m_window);
+    w.Invalidate(m_plotWindowState);
+
+    // Re-enable mouse hover
+    m_window->OnMouseHoverCallback = [this](Point p) { this->OnMouseHoverCallback(*m_window, p); };
 }
 
 }  // namespace cpplot2d
