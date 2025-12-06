@@ -22,15 +22,11 @@
 #include <vector>
 #include <iostream>
 
-// Enable by defining CPLOT2D_ENABLE_DEBUG (in CMake or project preprocessor defs)
-#define CPPLOT2D_ENABLE_DEBUG
-
-
 #ifdef _WIN32
 #include <windows.h>
 #endif
 
-// Enable by defining CPLOT2D_ENABLE_DEBUG (in CMake or project preprocessor defs)
+// Enable by defining CPPLOT2D_ENABLE_DEBUG (in CMake or project preprocessor defs)
 #ifdef CPPLOT2D_ENABLE_DEBUG
 
 // Print to stderr and, on Windows, send to the debugger output.
@@ -374,6 +370,10 @@ struct Color
     {
         return {0, 0, 255};
     }
+    static constexpr Color Yellow()
+    {
+        return {255, 255, 0};
+    }
 
     /**
      Creates a Color from standard RGBA values.
@@ -410,7 +410,7 @@ struct PlotProperties
     Color backgroundColor = Color::Black();
     Color borderColor = Color::White();
     bool showLegend = true;
-    const int tickLineCount = 10;
+    int tickLineCount = 4;
     int labelTextSpacing = 5;
     const std::pair<int, int> minWindowSize = {200, 100};
     const std::pair<int, int> defaultWindowSize = {800, 600};
@@ -459,6 +459,15 @@ class Plot2D
    protected:
     using Point = std::pair<int, int>;
 
+    enum class InteractionMode : uint8_t
+    {
+        NONE = 0,
+        PAN_DEFAULT = 1,
+        ZOOM_DEFAULT = 2,
+        PAN_ACTIVE = 3,
+        ZOOM_ACTIVE = 4
+    };
+
     // Text orientation
     enum class Orientation : uint8_t
     {
@@ -466,56 +475,23 @@ class Plot2D
         VERTICAL = 1
     };
 
-    // Lightweight view into an array. C++17 implementation of span.
-    template <typename T>
-    class ArrayView
-    {
-       public:
-        ArrayView() : m_data(nullptr), m_size(0)
-        {
-        }
-        ArrayView(const T* data, size_t size) : m_data(data), m_size(size)
-        {
-        }
-        template <typename Alloc>
-        ArrayView(const std::vector<T, Alloc>& v) : m_data(v.data()), m_size(v.size())
-        {
-        }
-
-        const T* data() const
-        {
-            return m_data;
-        }
-        size_t size() const
-        {
-            return m_size;
-        }
-        const T& operator[](size_t i) const
-        {
-            return m_data[i];
-        }
-
-       private:
-        const T* m_data;
-        size_t m_size;
-    };
-
     // Data series
     class Series
     {
        public:
-        Series(ArrayView<float> xs, ArrayView<float> ys) : x(xs), y(ys)
+        Series(const std::vector<float>& xs, const std::vector<float>& ys) : x(xs), y(ys)
         {
         }
-        ArrayView<float> x;
-        ArrayView<float> y;
+        std::vector<float> x;
+        std::vector<float> y;
     };
 
     // Series for line plots
     class LineSeries : public Series
     {
        public:
-        LineSeries(ArrayView<float> xs, ArrayView<float> ys, Color color, int size = 1)
+        LineSeries(const std::vector<float>& xs, const std::vector<float>& ys, Color color,
+                   int size = 1)
             : Series(xs, ys), size(size), color(color)
         {
         }
@@ -527,7 +503,8 @@ class Plot2D
     class ScatterSeries : public Series
     {
        public:
-        ScatterSeries(ArrayView<float> xs, ArrayView<float> ys, Color color, int pointSize = 1)
+        ScatterSeries(const std::vector<float>& xs, const std::vector<float>& ys, Color color,
+                      int pointSize = 1)
             : Series(xs, ys), pointSize(pointSize), color(color)
         {
         }
@@ -555,7 +532,7 @@ class Plot2D
      *  Notes:
      *   - Constructor: WindowRect(top, left, right, bottom)
      *   - Size() returns { width = right - left, height = top - bottom }
-     *   - This codebase uses a universal coordinate system where origin is at the
+     *   - This library uses a universal coordinate system where origin is at the
      *     bottom-left for drawing logic
     */
     struct WindowRect
@@ -565,6 +542,7 @@ class Plot2D
             : top(top), bottom(bottom), right(right), left(left)
         {
         }
+        WindowRect() = default;
 
         std::pair<int, int> Size()
         {
@@ -646,11 +624,21 @@ class Plot2D
     // Represents a rectangle to be drawn in the window
     struct GuiRect
     {
+       public:
+           GuiRect(Point topLeft, Point bottomRight,
+                   /*Color fillColor,*/ Color borderColor, int borderWidth = 1)
+               : topLeft(topLeft),
+                 bottomRight(bottomRight),
+                 /*fillColor(fillColor),*/
+                 borderColor(borderColor),
+                 borderWidth(borderWidth)
+           {
+           }
         Point topLeft;
         Point bottomRight;
-        Color fillColor;
+        //Color fillColor;
         Color borderColor;
-        int borderWidth;
+        int borderWidth = 1;
     };
 
     // Represents a circle to be drawn in the window
@@ -673,41 +661,59 @@ class Plot2D
         std::vector<GuiRect> rects;       
         std::vector<GuiCircle> circles;     
         Color background;
-        std::pair<int, int> minSize;
+        Point minSize;
     };
 
     // Interface for platform-specific window implementations
     class IWindow
     {
        public:
+           
+           using MenuButtons = std::map<std::string, std::function<void()>>;
 
-        // Draws text at given x and y position in window space. Returns id to that text
-        virtual void DrawTextAt(const std::string text, int spacing, int size = 1,
+           // Draws text at given x and y position in window space. Returns id to that text
+           virtual void DrawTextAt(const std::string text, int spacing, int size = 1,
                                 Point startPos = {0, 0},
                                 Orientation orientation = Orientation::HORIZONTAL,
                                 Color color = Color::White()) = 0;
 
-        // Invalidates entire window, forcing a redraw
-        virtual void Invalidate(std::shared_ptr<WindowState> windowState) = 0;
-        virtual int GetAverageCharWidth() = 0;
-        virtual void DrawWindowState() = 0;
+            // Invalidates entire window, forcing a redraw
+            virtual void Invalidate(std::shared_ptr<WindowState> windowState) = 0;
 
-        // Invalidates only the space  encompassed in the given rect
-        virtual void InvalidateRegion(const WindowRect& rect, const WindowState& windowState) = 0;
-        virtual void AddMenuButton(const std::string menu, const std::string label,
-                                   std::function<void()> onClickCallback) = 0;
-        virtual bool SaveScreenshotAsPNG(const std::string& fileName) = 0;
-        virtual void SetIsVisible(bool isVisible) = 0;
+            // Returns average character width in pixels for the current font
+            virtual int GetAverageCharWidth() = 0;
 
-        // Returns a timestamp string for use in file names in the format YYYYMMDD_HHMMSS
-        virtual std::string GetTimestamp() = 0;
-        virtual WindowRect GetRect() = 0;
-        virtual void RunEventLoop() = 0;
-        std::function<void(Point)> OnMouseHoverCallback;
-        std::function<void()> OnResizeStartCallback;
-        std::function<void()> OnResizeEndCallback;
-        std::function<void()> OnResizeCallback;
-        std::function<void(ScrollEvent)> OnScrollWheelMoveCallback;
+            // Draws the current window state
+            virtual void DrawWindowState() = 0;
+
+            // Invalidates only the space  encompassed in the given rect
+            virtual void InvalidateRegion(const WindowRect& rect, const WindowState& windowState) = 0;
+
+            // Adds a button to the menu bar
+            virtual void AddMenuButtons(const std::string menu, MenuButtons menuButtons) = 0;
+            // Saves a screenshot of the window as a PNG file. fileName is the name of the file only.
+            virtual bool SaveScreenshotAsPNG(const std::string& fileName) = 0;
+
+            // Sets whether the window is visible or hidden
+            virtual void SetIsVisible(bool isVisible) = 0;
+
+            // Returns a timestamp string for use in file names in the format YYYYMMDD_HHMMSS
+            virtual std::string GetTimestamp() = 0;
+
+            // Returns the current window rectangle
+            virtual WindowRect GetRect() = 0;
+
+            // Runs the window event loop (blocking)
+            virtual void RunEventLoop() = 0;
+        
+            // Callbacks
+            std::function<void(Point)> OnMouseMoveCallback;
+            std::function<void(Point)> OnMouseLButtonDownCallback;
+            std::function<void(Point)> OnMouseLButtonUpCallback;
+            std::function<void()> OnResizeStartCallback;
+            std::function<void()> OnResizeEndCallback;
+            std::function<void()> OnResizeCallback;
+            std::function<void(ScrollEvent)> OnScrollWheelMoveCallback;
     };
 
     // Interface for platform-specific graphics context implementations
@@ -723,15 +729,24 @@ class Plot2D
                                                             const std::string& title) = 0;
     };
 
+    InteractionMode m_InteractionMode = InteractionMode::NONE;
     static std::unique_ptr<IGraphicsContext> m_graphicsContext;
     std::unique_ptr<IWindow> m_window;
     void UpdateOffsets(const std::vector<float>& x, const std::vector<float>& y);
-    void OnMouseHoverCallback(IWindow& window, Point mousePos);
+    void OnMouseMoveCallback(IWindow& window, Point mousePos);
+    void OnMouseLButtonDownCallback(IWindow& window, Point mousePos);
+    void OnMouseLButtonUpCallback(IWindow& window, Point mousePos);
     void OnWindowResizeCallback(IWindow& window);
-    void OnSaveButtonClicked(IWindow& window);
-    void OnResetZoomButtonClicked(IWindow& window);
+    void OnSaveClicked(IWindow& window);
+    void OnToggleZoomClicked(IWindow& window);
+    void OnToggleGrabClicked(IWindow& window);
+    void OnResetViewClicked(IWindow& window);
     void OnWindowResizeEndCallback(IWindow& window);
     void OnScrollWheelMoveCallback(ScrollEvent wheelEvent, IWindow& window);
+    void HandleMouseHover(IWindow& w, Point mousePos);
+    void HandleZoomDrag(IWindow& w, Point mousePos);
+    void HandlePanDrag(IWindow& w, Point mousePos);
+    void Zoom(WindowRect rect, IWindow& w);
     std::pair<float, float> GetPlotBorderOffsets();
     void SetViewportRect(const WindowRect& rect);
     void SetPlotBorderOffsets(std::pair<float, float> offsets);
@@ -741,11 +756,7 @@ class Plot2D
                                                               const int windowWidth,
                                                               const int& windowHeight);
     void UpdatePlotWindowState(WindowState* windowState, IWindow& window);
-    // Returns data points as polyline based on window sizes
-    // TOOD: account for zoom here?
     GuiPolyline GetDataPolyline(const LineSeries& series, IWindow& window);
-
-    // Returns plot border as polyline
     GuiPolyline GetPlotBorderPolyline(IWindow& window, Color color);
     std::pair<std::vector<GuiLine>, std::vector<GuiText>> GetPlotBorderTickLines(IWindow& window,
                                                                                  Color color);
@@ -757,12 +768,12 @@ class Plot2D
         std::vector<ScatterSeries> points;
     } m_dataSeries;
     
-    std::pair<float, float> PlotZeroOffset = {(std::numeric_limits<float>::max)(),
+    std::pair<float, float> m_plotZeroOffsets = {(std::numeric_limits<float>::max)(),
                                               (std::numeric_limits<float>::max)()};
     std::pair<float, float> m_plotBorderOffsets;    // TODO: REMOVE
-    WindowRect m_viewportRect = {0,0,0,0};               // current viewport in window space
+    WindowRect m_viewportRect = {0,0,0,0};          // current viewport in window space
 
-    // runtime view (what is currently shown). Defaults initialized when data is first added.
+    // Runtime view (what is currently shown)
     std::pair<float, float> m_viewZero = {0.0f, 0.0f};  // data-space lower-left of current view
     float m_viewSpanX = 0.0f;                           // data-space width of current view
     float m_viewSpanY = 0.0f;                           // data-space height of current view
@@ -770,20 +781,19 @@ class Plot2D
     // Whether to invalidate small region for mouse coords. 
     // Useful to prevent invalidating more than once.
     bool m_invalidateMouseCoordRegion = false;  
-
+    Point m_lastMousePos = {0, 0};
     std::pair<float, float> m_defaultViewZero = {0.0f, 0.0f};
     float m_defaultViewSpanX = 0.0f;
     float m_defaultViewSpanY = 0.0f;
-    const float m_plotBorderOffsetFactor = 0.125;
+    const float m_plotBorderOffsetFactor = 0.125f;
     std::string xLabel;
     std::string yLabel;
     std::string title;
-    float dataSpanX = 0;
-    float dataSpanY = 0;
-    float largestX = -(std::numeric_limits<float>::max)(),
-          largestY = -(std::numeric_limits<float>::max)();
-    float smallestX = (std::numeric_limits<float>::max)(),
-          smallestY = (std::numeric_limits<float>::max)();
+    std::pair<float, float> m_dataSpans = {0.0f, 0.0f};
+    std::pair<float, float> m_largestDataPoints = {-(std::numeric_limits<float>::max)(),
+                                                 -(std::numeric_limits<float>::max)()};
+    std::pair<float, float> m_smallestDataPoints = {(std::numeric_limits<float>::max)(),
+                                                  (std::numeric_limits<float>::max)()};
     const int tickLength = 4;
     const std::pair<int, int> minWindowSize = {200, 100};
     std::pair<int, int> defaultWindowSize = {800, 600};
@@ -814,11 +824,7 @@ class Plot2D
         void DrawTextAt(const std::string text, int spacing, int size = 1, Point startPos = {0,0},
                         Orientation orientation = Orientation::HORIZONTAL, Color color = Color::White()) override;
         int GetAverageCharWidth() override;
-
-        // TODO: This is currently designed to treat each new menu button as a new menu.
-        // Modify to allow multiple buttons under same menu?
-        void AddMenuButton(const std::string menu, const std::string label,
-                           std::function<void()> onClickCallback) override;
+        void AddMenuButtons(const std::string menu, MenuButtons menuButtons) override;
         void SetIsVisible(bool isVisible) override;
         void Invalidate(std::shared_ptr<WindowState> windowState) override;
         void DrawWindowState() override;
@@ -842,6 +848,15 @@ class Plot2D
         HBITMAP CaptureWindowContent(HWND hwnd);
         COLORREF ToWin32Color(const Color color);
         void DoDrawText(HDC hdc, GuiText text, RECT clientRect);
+        void ResizeBackBuffer(HWND hwnd);
+
+        struct doubleBufferedDC
+        {
+            HBITMAP backBuffer = nullptr;
+            HDC backDC = nullptr;
+            int bufferW = 0;
+            int bufferH = 0;
+        } m_backBuffer;
     };
 
 #elif defined(__linux__) 
@@ -923,19 +938,23 @@ Plot2D::Win32Window::Win32Window(std::pair<int, int> defaultWindowSize, std::pai
         std::cout << "Failed to create window. Error: " << err << std::endl;
     }
     m_hMenu = CreateMenu();
+
+    ResizeBackBuffer(m_hwnd);
 }
 
-void Plot2D::Win32Window::AddMenuButton(const std::string menu, const std::string label,
-                                        std::function<void()> onClickCallback)
+void Plot2D::Win32Window::AddMenuButtons(const std::string menu, MenuButtons menuButtons)
 {
     HMENU hNewMenu = CreateMenu();
-    int id = IDGenerator::Next();
-    AppendMenu(hNewMenu, MF_STRING, id, label.c_str());
+    for (const auto& pair : menuButtons)
+    {
+        int id = IDGenerator::Next();
+        AppendMenu(hNewMenu, MF_STRING, id, pair.first.c_str());
+        m_menuCommands.emplace(id, pair.second);
+
+    }
+
     AppendMenu(m_hMenu, MF_POPUP, (UINT_PTR)hNewMenu, menu.c_str());
-
     SetMenu(m_hwnd, m_hMenu);
-
-    m_menuCommands.emplace(id, onClickCallback);
 }
 
 std::string Plot2D::Win32Window::GetTimestamp()
@@ -1026,8 +1045,6 @@ HBITMAP Plot2D::Win32Window::CaptureWindowContent(HWND hwnd)
 
     if (!success)
     {
-        // Ensure the window is up-to-date (optional; use with care)
-        // UpdateWindow(hwnd);
         success = BitBlt(hdcMemDC, 0, 0, width, height, hdcWindow, 0, 0, SRCCOPY);
     }
 
@@ -1039,12 +1056,11 @@ HBITMAP Plot2D::Win32Window::CaptureWindowContent(HWND hwnd)
 
     if (!success)
     {
-        // Clean up the bitmap we created
+        // Clean up the bitmap
         DeleteObject(hbmScreen);
         return NULL;
     }
 
-    // Caller owns the HBITMAP and must DeleteObject it when done
     return hbmScreen;
 }
 void Plot2D::Win32Window::SaveHBITMAPToFile(HBITMAP hBitmap, const std::string& filename)
@@ -1188,6 +1204,7 @@ inline LRESULT Plot2D::Win32Window::HandleMessage(HWND hwnd, UINT uMsg, WPARAM w
         }
         case WM_SIZE:
         {
+            ResizeBackBuffer(hwnd);
             if (OnResizeCallback) OnResizeCallback();
             break;
         }
@@ -1231,8 +1248,30 @@ inline LRESULT Plot2D::Win32Window::HandleMessage(HWND hwnd, UINT uMsg, WPARAM w
             // Get the mouse position
             int x = LOWORD(lParam);
             int y = HIWORD(lParam);
-            if (OnMouseHoverCallback)
-                OnMouseHoverCallback(Point(
+            if (OnMouseMoveCallback)
+                OnMouseMoveCallback(Point(
+                    x, rect.bottom - y));  // Give Y in the expected universal coordinate system
+
+            break;
+        }
+        case WM_LBUTTONDOWN:
+        {
+            // Get the mouse position
+            int x = LOWORD(lParam);
+            int y = HIWORD(lParam);
+            if (OnMouseLButtonDownCallback)
+                OnMouseLButtonDownCallback(Point(
+                    x, rect.bottom - y));  // Give Y in the expected universal coordinate system
+
+            break;
+        }
+        case WM_LBUTTONUP:
+        {
+            // Get the mouse position
+            int x = LOWORD(lParam);
+            int y = HIWORD(lParam);
+            if (OnMouseLButtonUpCallback)
+                OnMouseLButtonUpCallback(Point(
                     x, rect.bottom - y));  // Give Y in the expected universal coordinate system
 
             break;
@@ -1274,7 +1313,36 @@ void Plot2D::Win32Window::DoDrawText(HDC hdc, GuiText text, RECT clientRect)
     TextOut(hdc, text.pos.first, clientRect.bottom - text.pos.second, text.text.c_str(),
             static_cast<int>(text.text.length()));
 }
+void Plot2D::Win32Window::ResizeBackBuffer(HWND hwnd)
+{
+    HDC windowDC = GetDC(hwnd);
 
+    RECT rc;
+    GetClientRect(hwnd, &rc);
+    int w = rc.right - rc.left;
+    int h = rc.bottom - rc.top;
+
+    if (m_backBuffer.backBuffer)
+    {
+        DeleteObject(m_backBuffer.backBuffer);
+        m_backBuffer.backBuffer = nullptr;
+    }
+    if (m_backBuffer.backDC)
+    {
+        DeleteDC(m_backBuffer.backDC);
+        m_backBuffer.backDC = nullptr;
+    }
+
+    m_backBuffer.backDC = CreateCompatibleDC(windowDC);
+    m_backBuffer.backBuffer = CreateCompatibleBitmap(windowDC, w, h);
+
+    SelectObject(m_backBuffer.backDC, m_backBuffer.backBuffer);
+
+    m_backBuffer.bufferW = w;
+    m_backBuffer.bufferH = h;
+
+    ReleaseDC(hwnd, windowDC);
+}
 void Plot2D::Win32Window::DrawWindowState()
 {
     RECT rect;
@@ -1284,14 +1352,14 @@ void Plot2D::Win32Window::DrawWindowState()
 
     // Fill background
     HBRUSH blackBrush = CreateSolidBrush(ToWin32Color(m_windowState->background));
-    FillRect(hdc, &rect, blackBrush);
+    FillRect(m_backBuffer.backDC, &rect, blackBrush);
     DeleteObject(blackBrush);
 
     // Draw Polylines
     std::map<Color, HPEN> brushes;  // HPEN hashmap
     HPEN hpen = nullptr;
     std::map<Color, HPEN>::iterator it;
-    for (GuiPolyline polyline : m_windowState->polylines)
+    for (const GuiPolyline& polyline : m_windowState->polylines)
     {
         // Get brush for current line from hashmap or add new mapping
         it = brushes.find(polyline.color);
@@ -1308,19 +1376,30 @@ void Plot2D::Win32Window::DrawWindowState()
         int size = polyline.points.size();
         if (size <= 0) continue;
 
-        SelectObject(hdc, hpen);
+        SelectObject(m_backBuffer.backDC, hpen);
 
         // Draw initial point, then LineTo the rest
-        MoveToEx(hdc, polyline.points[0].first, rect.bottom - polyline.points[0].second, NULL);
-        LineTo(hdc, polyline.points[0].first, rect.bottom - polyline.points[0].second);
+        MoveToEx(m_backBuffer.backDC, polyline.points[0].first, rect.bottom - polyline.points[0].second, NULL);
+        LineTo(m_backBuffer.backDC, polyline.points[0].first, rect.bottom - polyline.points[0].second);
         for (int i = 1; i < size; i++)
         {
-            LineTo(hdc, polyline.points[i].first, rect.bottom - polyline.points[i].second);
+            LineTo(m_backBuffer.backDC, polyline.points[i].first, rect.bottom - polyline.points[i].second);
         }
+    }
+    // Draw Rects
+    for (const GuiRect& guiRect : m_windowState->rects)
+    {
+        // Draw rectangle frame
+        HBRUSH brush = CreateSolidBrush(ToWin32Color(guiRect.borderColor));
+        
+        const RECT winRect = {guiRect.topLeft.first, rect.bottom - guiRect.topLeft.second,
+                        guiRect.bottomRight.first, rect.bottom - guiRect.bottomRight.second};
+        FrameRect(m_backBuffer.backDC, &winRect, brush);
+        DeleteObject(brush);
     }
 
     // Draw Lines
-    for (GuiLine line : m_windowState->lines)
+    for (const GuiLine& line : m_windowState->lines)
     {
         // Get brush for current line from hashmap or add new mapping
 
@@ -1335,17 +1414,17 @@ void Plot2D::Win32Window::DrawWindowState()
             brushes.emplace(line.color, hpen);
         }
 
-        SelectObject(hdc, hpen);
+        SelectObject(m_backBuffer.backDC, hpen);
 
         // Draw initial point, then LineTo the rest
-        MoveToEx(hdc, line.p1.first, rect.bottom - line.p1.second, NULL);
-        LineTo(hdc, line.p2.first, rect.bottom - line.p2.second);
+        MoveToEx(m_backBuffer.backDC, line.p1.first, rect.bottom - line.p1.second, NULL);
+        LineTo(m_backBuffer.backDC, line.p2.first, rect.bottom - line.p2.second);
     }
 
     // Draw Text
-    for (GuiText text : m_windowState->text)
+    for (const GuiText& text : m_windowState->text)
     {
-        DoDrawText(hdc, text, rect);
+        DoDrawText(m_backBuffer.backDC, text, rect);
     }
 
     // Delete HPEN objects
@@ -1354,6 +1433,11 @@ void Plot2D::Win32Window::DrawWindowState()
         if (pair.second)
             DeleteObject(pair.second);
     }
+
+    // Double-buffering: copy back buffer to window DC
+    BitBlt(hdc, 0, 0, m_backBuffer.bufferW, m_backBuffer.bufferH, m_backBuffer.backDC,
+           0, 0,
+           SRCCOPY);
 
     EndPaint(m_hwnd, &ps);
 }
@@ -1406,12 +1490,24 @@ Plot2D::Plot2D(const std::string& title, const std::string& xLabel, const std::s
     m_graphicsContext->Init();
     m_window =
         m_graphicsContext->MakeWindow(Color::Black(), defaultWindowSize, minWindowSize, false, title);
-    m_window->OnMouseHoverCallback = [this](Point p) { this->OnMouseHoverCallback(*m_window, p); };
+    m_window->OnMouseMoveCallback = [this](Point p) { this->OnMouseMoveCallback(*m_window, p); };
+    m_window->OnMouseLButtonDownCallback = [this](Point p)
+    { this->OnMouseLButtonDownCallback(*m_window, p); };
+    m_window->OnMouseLButtonUpCallback = [this](Point p)
+    { this->OnMouseLButtonUpCallback(*m_window, p); };
     m_window->OnResizeCallback = [this]() { this->OnWindowResizeCallback(*m_window); };
     m_window->OnResizeEndCallback = [this]() { this->OnWindowResizeEndCallback(*m_window); };
     m_window->OnScrollWheelMoveCallback = [this](ScrollEvent e) { this->OnScrollWheelMoveCallback(e, *m_window); };
-    m_window->AddMenuButton("File", "Save", [this]() { this->OnSaveButtonClicked(*m_window); });
-    m_window->AddMenuButton("View", "Reset Zoom", [this]() { this->OnResetZoomButtonClicked(*m_window); });
+       
+    std::map<std::string, std::function<void()>> fileMenuButtons;
+    fileMenuButtons["Save"] = [this]() { this->OnSaveClicked(*m_window); };
+    m_window->AddMenuButtons("File", fileMenuButtons);
+
+    std::map<std::string, std::function<void()>> viewMenuButtons;
+    viewMenuButtons["Toggle Zoom"] = [this]() { this->OnToggleZoomClicked(*m_window); };
+    viewMenuButtons["Toggle Grab"] = [this]() { this->OnToggleGrabClicked(*m_window); };
+    viewMenuButtons["Reset View"] = [this]() { this->OnResetViewClicked(*m_window); };
+    m_window->AddMenuButtons("View", viewMenuButtons);
 
     UpdatePlotWindowState(m_plotWindowState.get(), *m_window);
 }
@@ -1424,25 +1520,25 @@ void Plot2D::UpdateOffsets(const std::vector<float>& x, const std::vector<float>
     for (int i = 0; i < size; i++)
     {
         p = {x[i], y[i]};
-        if (p.first > largestX) largestX = p.first;
-        if (p.first < smallestX) smallestX = p.first;
-        if (p.second > largestY) largestY = p.second;
-        if (p.second < smallestY) smallestY = p.second;
+        if (p.first > m_largestDataPoints.first) m_largestDataPoints.first  = p.first;
+        if (p.first < m_smallestDataPoints.first) m_smallestDataPoints.first = p.first;
+        if (p.second > m_largestDataPoints.second) m_largestDataPoints.second = p.second;
+        if (p.second < m_smallestDataPoints.second) m_smallestDataPoints.second = p.second;
     }
 
     // The data span is the differnce between the largest and smallest points
-    dataSpanX = max((largestX - smallestX), dataSpanX);
-    dataSpanY = max((largestY - smallestY), dataSpanY);
+    m_dataSpans.first = max((m_largestDataPoints.first - m_smallestDataPoints.first), m_dataSpans.first);
+    m_dataSpans.second = max((m_largestDataPoints.second - m_smallestDataPoints.second), m_dataSpans.second);
 
     // The conversion from data-space to plot-space requires both coord systems to start from (0,
-    // 0). These values will be used to adjust the m_data points during transformation to achieve
+    // 0). These values will be used to adjust the data points during transformation to achieve
     // this.
-    PlotZeroOffset.first = min(PlotZeroOffset.first, smallestX);
-    PlotZeroOffset.second = min(PlotZeroOffset.second, smallestY);
+    m_plotZeroOffsets.first = min(m_plotZeroOffsets.first, m_smallestDataPoints.first);
+    m_plotZeroOffsets.second = min(m_plotZeroOffsets.second, m_smallestDataPoints.second);
 
-    m_viewZero = PlotZeroOffset;
-    m_viewSpanX = dataSpanX > 0.0f ? dataSpanX : 1.0f;
-    m_viewSpanY = dataSpanY > 0.0f ? dataSpanY : 1.0f;
+    m_viewZero = m_plotZeroOffsets;
+    m_viewSpanX = m_dataSpans.first > 0.0f ? m_dataSpans.first : 1.0f;
+    m_viewSpanY = m_dataSpans.second > 0.0f ? m_dataSpans.second : 1.0f;
 
     m_defaultViewZero = m_viewZero;
     m_defaultViewSpanX = m_viewSpanX;
@@ -1480,6 +1576,7 @@ void Plot2D::UpdatePlotWindowState(Plot2D::WindowState* windowState, IWindow& wi
     std::pair<std::vector<GuiLine>, std::vector<GuiText>> ticks =
         GetPlotBorderTickLines(window, Color::White());
     windowState->lines.clear();
+    windowState->rects.clear();
     windowState->text.clear();
     windowState->lines.insert(windowState->lines.end(), ticks.first.begin(), ticks.first.end());
     windowState->text.insert(windowState->text.end(), ticks.second.begin(), ticks.second.end());
@@ -1523,7 +1620,7 @@ Plot2D::GetPlotBorderTickLines(IWindow& window, Color color)
     std::stringstream label;
 
     // Draw X-axis ticks
-    int numTicksX = 4;
+    int numTicksX = m_plotProperties.tickLineCount;
     int x = 0;
     float offset = m_viewZero.first;
     int tickInterval = (rightBorderPos - leftBorderPos) / (numTicksX + 1);
@@ -1552,7 +1649,7 @@ Plot2D::GetPlotBorderTickLines(IWindow& window, Color color)
                              color, Orientation::HORIZONTAL));
 
     // Draw Y-axis ticks
-    int numTicksY = 4;
+    int numTicksY = m_plotProperties.tickLineCount;
     int y = 0;
     increment = m_viewSpanY / (numTicksY + 1);
     offset = m_viewZero.second;
@@ -1713,7 +1810,7 @@ void Plot2D::OnWindowResizeEndCallback(IWindow& window)
 void Plot2D::OnScrollWheelMoveCallback(ScrollEvent wheelEvent, IWindow& window)
 {
     // Temporarily disable mouse hover to avoid blanking during next update
-    m_window->OnMouseHoverCallback = nullptr;
+    m_window->OnMouseMoveCallback = nullptr;
 
     // Choose a sensible sensitivity; make it small so wheel gives smooth zoom.
     const double sensitivity = 0.0015;  // tweak as desired
@@ -1747,7 +1844,7 @@ void Plot2D::OnScrollWheelMoveCallback(ScrollEvent wheelEvent, IWindow& window)
     window.Invalidate(m_plotWindowState);
 
     // Re-enable mouse hover
-    m_window->OnMouseHoverCallback = [this](Point p) { this->OnMouseHoverCallback(*m_window, p); };
+    m_window->OnMouseMoveCallback = [this](Point p) { this->OnMouseMoveCallback(*m_window, p); };
 }
 
 std::pair<float, float> Plot2D::GetTransformedCoordinates(const int& x, const int& y,
@@ -1762,7 +1859,49 @@ std::pair<float, float> Plot2D::GetTransformedCoordinates(const int& x, const in
     return coordinates;
 }
 
-void Plot2D::OnMouseHoverCallback(IWindow& w, Point mousePos)
+void Plot2D::OnMouseMoveCallback(IWindow& w, Point mousePos)
+{
+    switch (m_InteractionMode)
+    {
+        case InteractionMode::NONE:
+            HandleMouseHover(w, mousePos);
+            break;
+        case InteractionMode::PAN_ACTIVE:
+            HandlePanDrag(w, mousePos);
+            break;
+        case InteractionMode::ZOOM_ACTIVE:
+            HandleZoomDrag(w, mousePos);
+    }
+}
+void Plot2D::HandlePanDrag(IWindow& w, Point mousePos)
+{
+    std::pair<int, int> windowSize = w.GetRect().Size();
+    std::pair<float, float> scales =
+        GetViewportToWindowScaleFactors(windowSize.first, windowSize.second);
+    // Calculate mouse movement delta in data coords
+    float deltaX = (m_lastMousePos.first - mousePos.first) * scales.first;
+    float deltaY = (m_lastMousePos.second - mousePos.second) * scales.second;
+    // Update view offsets
+    m_viewZero.first += deltaX;
+    m_viewZero.second += deltaY;
+    // Update and redraw
+    UpdatePlotWindowState(m_plotWindowState.get(), *m_window);
+    w.Invalidate(m_plotWindowState);
+}
+void Plot2D::HandleZoomDrag(IWindow& w,
+    Point mousePos)
+{
+    // Determine rectangle corners
+    int x1 = min(m_lastMousePos.first, mousePos.first);
+    int x2 = max(m_lastMousePos.first, mousePos.first);
+    int y1 = min(m_lastMousePos.second, mousePos.second);
+    int y2 = max(m_lastMousePos.second, mousePos.second);
+    // Draw rectangle overlay
+    m_plotWindowState->rects = {(GuiRect({x1, y2}, {x2, y1}, Color::Yellow()))};
+    w.Invalidate(m_plotWindowState);
+}
+
+void Plot2D::HandleMouseHover(IWindow& w, Point mousePos)
 {
     std::pair<float, float> plotBorderOffsets = GetPlotBorderOffsets();
     WindowRect rect = w.GetRect();
@@ -1777,7 +1916,7 @@ void Plot2D::OnMouseHoverCallback(IWindow& w, Point mousePos)
 
     // Mouse coordinates should fit inside a rect that starts at the top left corner and extends
     // 250 wide and 30 high
-    WindowRect mouseCoordinateRect(rect.top, rect.left, rect.left + 250, rect.top - 30); 
+    WindowRect mouseCoordinateRect(rect.top, rect.left, rect.left + 250, rect.top - 30);
 
     if (inside)
     {
@@ -1788,7 +1927,7 @@ void Plot2D::OnMouseHoverCallback(IWindow& w, Point mousePos)
         int n = _snprintf_s(buf, sizeof(buf), _TRUNCATE, "(X, Y) = (%.3g, %.3g)",
                             transformedCoords.first, transformedCoords.second);
         std::string coordText(buf, n > 0 ? n : 0);
-        
+
         WindowState mouseCoordinates;
         mouseCoordinates.text = {
             GuiText(coordText, Point(x, y), 1, Color::White(), Orientation::HORIZONTAL)};
@@ -1806,14 +1945,90 @@ void Plot2D::OnMouseHoverCallback(IWindow& w, Point mousePos)
     }
 }
 
-void Plot2D::OnSaveButtonClicked(IWindow& w)
+void Plot2D::OnMouseLButtonDownCallback(IWindow& w, Point mousePos)
+{
+    m_lastMousePos = mousePos;
+    switch (m_InteractionMode)
+    {
+        case InteractionMode::NONE:
+            break;
+        case InteractionMode::PAN_DEFAULT:
+            m_InteractionMode = InteractionMode::PAN_ACTIVE;
+            break;
+        case InteractionMode::ZOOM_DEFAULT:
+            m_InteractionMode = InteractionMode::ZOOM_ACTIVE;
+            break;
+        default:
+            break;
+    }
+}
+void Plot2D::OnMouseLButtonUpCallback(IWindow& w, Point mousePos)
+{
+    switch (m_InteractionMode)
+    {
+        case InteractionMode::PAN_ACTIVE:
+            m_InteractionMode = InteractionMode::PAN_DEFAULT;
+            break;
+        case InteractionMode::ZOOM_ACTIVE:
+            m_InteractionMode = InteractionMode::ZOOM_DEFAULT;
+            // TODO: Implement zoom to rectangle
+            WindowRect rect;
+            rect.left = min(m_lastMousePos.first, mousePos.first);
+            rect.right = max(m_lastMousePos.first, mousePos.first);
+            rect.bottom = min(m_lastMousePos.second, mousePos.second);
+            rect.top = max(m_lastMousePos.second, mousePos.second);
+            Zoom(rect, w);
+            break;
+
+    }
+}
+void Plot2D::Zoom(WindowRect rect, IWindow& w)
+{
+    // Set plot view to match rectangle
+    std::pair<int, int> windowSize = w.GetRect().Size();
+    std::pair<float, float> scales =
+        GetViewportToWindowScaleFactors(windowSize.first, windowSize.second);
+    m_viewZero.first = (rect.left - m_plotBorderOffsets.first) * scales.first + m_viewZero.first;
+    m_viewZero.second =
+        (rect.bottom - m_plotBorderOffsets.second) * scales.second + m_viewZero.second;
+    m_viewSpanX = (rect.right - rect.left) * scales.first;
+    m_viewSpanY = (rect.top - rect.bottom) * scales.second;
+    // Update and redraw
+    UpdatePlotWindowState(m_plotWindowState.get(), *m_window);
+    w.Invalidate(m_plotWindowState);
+}
+
+void Plot2D::OnSaveClicked(IWindow& w)
 {
     w.SaveScreenshotAsPNG(title + "_" + w.GetTimestamp());
 }
-void Plot2D::OnResetZoomButtonClicked(IWindow& w)
+void Plot2D::OnToggleZoomClicked(IWindow& w)
+{
+    if (m_InteractionMode == InteractionMode::ZOOM_DEFAULT)
+    {
+        m_InteractionMode = InteractionMode::NONE;
+    }
+    else
+    {
+        m_InteractionMode = InteractionMode::ZOOM_DEFAULT;
+    }
+
+}
+void Plot2D::OnToggleGrabClicked(IWindow& w)
+{
+    if (m_InteractionMode == InteractionMode::PAN_DEFAULT)
+    {
+        m_InteractionMode = InteractionMode::NONE;
+    }
+    else
+    {
+        m_InteractionMode = InteractionMode::PAN_DEFAULT;
+    }
+}
+void Plot2D::OnResetViewClicked(IWindow& w)
 {
     // Temporarily disable mouse hover to avoid blanking during next update
-    m_window->OnMouseHoverCallback = nullptr;
+    m_window->OnMouseMoveCallback = nullptr;
 
     // Restore saved defaults
     m_viewZero = m_defaultViewZero;
@@ -1824,7 +2039,7 @@ void Plot2D::OnResetZoomButtonClicked(IWindow& w)
     w.Invalidate(m_plotWindowState);
 
     // Re-enable mouse hover
-    m_window->OnMouseHoverCallback = [this](Point p) { this->OnMouseHoverCallback(*m_window, p); };
+    m_window->OnMouseMoveCallback = [this](Point p) { this->OnMouseMoveCallback(*m_window, p); };
 }
 
 }  // namespace cpplot2d

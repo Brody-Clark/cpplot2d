@@ -10,28 +10,24 @@ class Plot2DBenchmark : public cpplot2d::Plot2D
         : cpplot2d::Plot2D()
         {
         }
-        Plot2D::GuiPolyline TestGetDataPolyline(const std::vector<std::pair<float, float>>& data,
-            cpplot2d::Color color, IWindow& window)
+        Plot2D::GuiPolyline TestGetDataPolyline(const std::vector<float>& x,
+                                                const std::vector<float>& y,
+                                                cpplot2d::Color color, 
+                                                IWindow& window)
         {
-            Series series(
-                ArrayView<float>(reinterpret_cast<const float*>(data.data()), data.size()),
-                ArrayView<float>(reinterpret_cast<const float*>(
-                    reinterpret_cast<const char*>(data.data()) + sizeof(float)),
-                    data.size()),
-                color);
+            LineSeries series(x, y, cpplot2d::Color::Black(), 1);
+           
             return GetDataPolyline(series, window);
         }
 
-    // Minimal mock window implementing only what's required by GetDataPolyline
+    // Minimal mock window implementation
     class MockWindow : public cpplot2d::Plot2D::IWindow
     {
        public:
         MockWindow(int width, int height) : m_width(width), m_height(height)
         {
         }
-        void Invalidate(const WindowState& windowState) override
-        {
-        }
+
         int GetAverageCharWidth() override
         {
             return 8;
@@ -42,8 +38,10 @@ class Plot2DBenchmark : public cpplot2d::Plot2D
         void InvalidateRegion(const WindowRect& rect, const WindowState& windowState) override
         {
         }
-        void AddMenuButton(const std::string menu, const std::string label,
-                           std::function<void()> onClickCallback) override
+        void AddMenuButtons(const std::string menu, MenuButtons menuButtons) override
+        {
+        }
+        void Invalidate(std::shared_ptr<WindowState> windowState) override
         {
         }
         bool SaveScreenshotAsPNG(const std::string& fileName) override
@@ -74,7 +72,6 @@ class Plot2DBenchmark : public cpplot2d::Plot2D
         int m_width;
         int m_height;
 
-        // Inherited via IWindow
         void DrawTextAt(const std::string text, int spacing, int size, Point startPos,
                         Orientation orientation, cpplot2d::Color color) override
         {
@@ -94,24 +91,18 @@ static void BM_GetDataPolyline(benchmark::State& state)
         ys[i] = static_cast<float>(i % 100);
     }
 
-    // Construct Plot2D (this may initialize GDI+ / create a window depending on platform)
+    // Construct Plot
     Plot2DBenchmark plot(xs, ys, "benchmark_plot");
-
-    // Build data vector to pass to GetDataPolyline (must match datasetSize inside Plot2D)
-    std::vector<std::pair<float, float>> data;
-    data.reserve(N);
-    for (int i = 0; i < N; ++i) data.emplace_back(xs[i], ys[i]);
-
     Plot2DBenchmark::MockWindow mockWindow(800, 600);
 
     for (auto _ : state)
     {
-        auto poly = plot.TestGetDataPolyline(data, cpplot2d::Color::Green(), mockWindow);
+        auto poly = plot.TestGetDataPolyline(xs, ys, cpplot2d::Color::Green(), mockWindow);
         benchmark::DoNotOptimize(poly);
     }
 }
 
-// Register benchmark with a few sizes; tune to your machine
+// Register benchmark with a few sizes
 BENCHMARK(BM_GetDataPolyline)->Arg(100)->Arg(10000)->Arg(100000)->Arg(1000000);
 
 BENCHMARK_MAIN();

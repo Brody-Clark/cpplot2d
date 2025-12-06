@@ -4,8 +4,8 @@
 #ifdef _WIN32
 int main()
 {
-    std::vector<float> x(200000);
-    std::vector<float> y(200000);
+    std::vector<float> x(2000000);
+    std::vector<float> y(2000000);
     std::vector<float> x2(200000);
     std::vector<float> y2(200000);
     for (int i = 0; i < 100000; i++)
@@ -26,7 +26,6 @@ int main()
     plot.AddLine(x, y, cpplot2d::Color::FromRGB(0, 255, 0))
         .AddLine(x2, y2, cpplot2d::Color::FromRGB(255, 0, 0));
     plot.Show();
-
 }
 #elif defined(__linux__)
 
