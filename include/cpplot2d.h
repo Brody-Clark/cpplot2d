@@ -1028,23 +1028,8 @@ HBITMAP Plot2D::Win32Window::CaptureWindowContent(HWND hwnd)
     HBITMAP hOldBmp = (HBITMAP)SelectObject(hdcMemDC, hbmScreen);
 
     BOOL success = FALSE;
-
-    // Prefer PrintWindow (asks window to paint into DC). Fallback to BitBlt.
-    if (IsWindow(hwnd))
-    {
-        // Some windows don't support PrintWindow. It may still work better for
-        // layered/double-buffered windows.
-        if (PrintWindow(hwnd, hdcMemDC, PW_CLIENTONLY) == TRUE)
-        {
-            success = TRUE;
-        }
-    }
-
-    if (!success)
-    {
-        success = BitBlt(hdcMemDC, 0, 0, width, height, hdcWindow, 0, 0, SRCCOPY);
-    }
-
+    success = BitBlt(hdcMemDC, 0, 0, width, height, hdcWindow, 0, 0, SRCCOPY);
+    
     // Restore original bitmap into mem DC before deleting DC
     SelectObject(hdcMemDC, hOldBmp);
 
