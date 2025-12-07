@@ -1362,7 +1362,6 @@ void Plot2D::Win32Window::DrawWindowState()
     for (const GuiLine& line : m_windowState->lines)
     {
         // Get brush for current line from hashmap or add new mapping
-
         it = brushes.find(line.color);
         if (it != brushes.end())
         {
@@ -1379,6 +1378,20 @@ void Plot2D::Win32Window::DrawWindowState()
         // Draw initial point, then LineTo the rest
         MoveToEx(m_backBuffer.backDC, line.p1.first, rect.bottom - line.p1.second, NULL);
         LineTo(m_backBuffer.backDC, line.p2.first, rect.bottom - line.p2.second);
+    }
+
+    // Draw Circles
+    for (const GuiCircle& cirlce : m_windowState->circles)
+    {
+        HBRUSH brush = CreateSolidBrush(ToWin32Color(cirlce.fillColor));
+        HBRUSH oldBrush = (HBRUSH)SelectObject(m_backBuffer.backDC, brush);
+        Ellipse(m_backBuffer.backDC,
+                cirlce.center.first - cirlce.radius,
+                rect.bottom - (cirlce.center.second + cirlce.radius),
+                cirlce.center.first + cirlce.radius,
+                rect.bottom - (cirlce.center.second - cirlce.radius));
+        SelectObject(m_backBuffer.backDC, oldBrush);
+        DeleteObject(brush);
     }
 
     // Draw Text
