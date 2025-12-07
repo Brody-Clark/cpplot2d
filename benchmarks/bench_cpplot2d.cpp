@@ -71,11 +71,6 @@ class Plot2DBenchmark : public cpplot2d::Plot2D
        private:
         int m_width;
         int m_height;
-
-        void DrawTextAt(const std::string text, int spacing, int size, Point startPos,
-                        Orientation orientation, cpplot2d::Color color) override
-        {
-        }
     };
 };
 

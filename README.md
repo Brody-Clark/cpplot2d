@@ -27,7 +27,7 @@ Simply copy the header file from `include/cpplot2d.h` and include it in your pro
 
 ## Examples
 
-### Windows
+**Simple line plot**
 
 ```cpp
 
@@ -36,8 +36,8 @@ Simply copy the header file from `include/cpplot2d.h` and include it in your pro
 int main()
 {
     // Create dataset as 2-D vector of any numeric type
-    std::vector<float> x;
-    std::vector<float> y;
+    std::vector<float> x = {1,2,3};
+    std::vector<float> y = {1,2,3};
 
     // Create plot object and add a green line 
     cpplot2d::Plot2D plot;
@@ -47,34 +47,32 @@ int main()
     plot.Show();
 
 }
-
 ```
 
-### Apple
+**Multiple Lines**
 
 ```cpp
 
 #include "cpplot2d.h"
 
-int main(int argc, const char * argv[])
+int main()
 {
     // Create dataset as 2-D vector of any numeric type
-    std::vector<float> x;
-    std::vector<float> y;
+    std::vector<float> x1 = {1,2,3};
+    std::vector<float> y1 = {1,2,3};
+    std::vector<float> x2 = {4,5,6};
+    std::vector<float> y2 = {4,5,6};
 
     // Create plot object and add a green line 
     cpplot2d::Plot2D plot;
-    plot.AddLine(x, y, cpplot2d::Color::FromRGB(0, 255, 0));
+    plot.AddLine(x1, y1, cpplot2d::Color::FromRGB(0, 255, 0))
+        .AddLine(x2, y2, cpplot2d::Color::FromRGB(255, 255, 0));
     
     // Show the plot
     plot.Show();
+
 }
-
 ```
-
-### Linux
-
-⚠️ WIP ⚠️
 
 **Sample plot:**
 

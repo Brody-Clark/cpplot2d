@@ -675,12 +675,6 @@ class Plot2D
            
            using MenuButtons = std::map<std::string, std::function<void()>>;
 
-           // Draws text at given x and y position in window space. Returns id to that text
-           virtual void DrawTextAt(const std::string text, int spacing, int size = 1,
-                                Point startPos = {0, 0},
-                                Orientation orientation = Orientation::HORIZONTAL,
-                                Color color = Color::White()) = 0;
-
             // Invalidates entire window, forcing a redraw
             virtual void Invalidate(std::shared_ptr<WindowState> windowState) = 0;
 
@@ -695,6 +689,7 @@ class Plot2D
 
             // Adds a button to the menu bar
             virtual void AddMenuButtons(const std::string menu, MenuButtons menuButtons) = 0;
+
             // Saves a screenshot of the window as a PNG file. fileName is the name of the file only.
             virtual bool SaveScreenshotAsPNG(const std::string& fileName) = 0;
 
@@ -771,11 +766,12 @@ class Plot2D
         std::vector<LineSeries> lines;
         std::vector<ScatterSeries> points;
     } m_dataSeries;
-    
+  
     std::pair<float, float> m_plotZeroOffsets = {(std::numeric_limits<float>::max)(),
                                               (std::numeric_limits<float>::max)()};
-    std::pair<float, float> m_plotBorderOffsets;    // TODO: REMOVE
-    WindowRect m_viewportRect = {0,0,0,0};          // current viewport in window space
+    std::pair<float, float> m_plotBorderOffsets;        // offsets from window edge to plot area
+
+    WindowRect m_viewportRect = {0,0,0,0};              // current viewport in window space
 
     // Runtime view (what is currently shown)
     std::pair<float, float> m_viewZero = {0.0f, 0.0f};  // data-space lower-left of current view
@@ -789,7 +785,7 @@ class Plot2D
     std::pair<float, float> m_defaultViewZero = {0.0f, 0.0f};
     float m_defaultViewSpanX = 0.0f;
     float m_defaultViewSpanY = 0.0f;
-    const float m_plotBorderOffsetFactor = 0.125f;
+    static constexpr float m_plotBorderOffsetFactor = 0.125f;
     std::string xLabel;
     std::string yLabel;
     std::string title;
@@ -798,7 +794,7 @@ class Plot2D
                                                  -(std::numeric_limits<float>::max)()};
     std::pair<float, float> m_smallestDataPoints = {(std::numeric_limits<float>::max)(),
                                                   (std::numeric_limits<float>::max)()};
-    const int tickLength = 4;
+    static constexpr int m_tickLength = 4;
     const std::pair<int, int> minWindowSize = {200, 100};
     std::pair<int, int> defaultWindowSize = {800, 600};
     PlotProperties m_plotProperties;
@@ -825,8 +821,7 @@ class Plot2D
         Win32Window(std::pair<int, int> defaultWindowSize, std::pair<int, int> pos,
                     std::string title);
 
-        void DrawTextAt(const std::string text, int spacing, int size = 1, Point startPos = {0,0},
-                        Orientation orientation = Orientation::HORIZONTAL, Color color = Color::White()) override;
+       
         int GetAverageCharWidth() override;
         void AddMenuButtons(const std::string menu, MenuButtons menuButtons) override;
         void SetIsVisible(bool isVisible) override;
@@ -1283,18 +1278,11 @@ inline LRESULT Plot2D::Win32Window::HandleMessage(HWND hwnd, UINT uMsg, WPARAM w
     }
     return DefWindowProc(hwnd, uMsg, wParam, lParam);
 }
-COLORREF Plot2D::Win32Window::ToWin32Color(const Color color)
+inline COLORREF Plot2D::Win32Window::ToWin32Color(const Color color)
 {
     return RGB(color.r, color.g, color.b);
 }
 
-void Plot2D::Win32Window::DrawTextAt(const std::string text, int spacing, int size,
-                                     Point startPos,
-                                     Orientation orientation,
-                                     Color color)
-{
-    m_windowState->text.push_back(GuiText(text, startPos, spacing, color, orientation));
-}
 void Plot2D::Win32Window::DoDrawText(HDC hdc, GuiText text, RECT clientRect)
 {
     SetTextColor(hdc, ToWin32Color(text.color));
@@ -1441,15 +1429,12 @@ void Plot2D::Win32Window::InvalidateRegion(const Plot2D::WindowRect& windowRect,
     // Universal coords assume origin at bottom left and extend up. Win32 is the opposite
     const RECT rect = {windowRect.left, win32Rect.bottom - windowRect.top, windowRect.right,
                        win32Rect.bottom - windowRect.bottom};
-    CPPLOT2D_DEBUG("Invalidating Region %i %i %i %i", rect.top, rect.left, rect.bottom, rect.right);
     InvalidateRect(m_hwnd, &rect, FALSE);
 }
 
 void Plot2D::Win32Window::Invalidate(std::shared_ptr<Plot2D::WindowState> windowState)
 {
     m_windowState = windowState;
-    CPPLOT2D_DEBUG("Invalidating");
-
     InvalidateRect(m_hwnd, nullptr, FALSE);
 }
 
@@ -1648,7 +1633,7 @@ Plot2D::GetPlotBorderTickLines(IWindow& window, Color color)
 
         // Add tick line
         ticks.push_back(
-            GuiLine({x, bottomBorderPos + tickLength}, {x, bottomBorderPos - tickLength}, color));
+            GuiLine({x, bottomBorderPos + m_tickLength}, {x, bottomBorderPos - m_tickLength}, color));
 
         // Add tick label
         label.str("");
@@ -1656,8 +1641,8 @@ Plot2D::GetPlotBorderTickLines(IWindow& window, Color color)
         labels.push_back(GuiText(label.str(), {x - 10, max(bottomBorderPos - 10, rect.bottom + 20)},
                                  1, color, Orientation::HORIZONTAL));
     }
-    ticks.push_back(GuiLine({rightBorderPos, bottomBorderPos + tickLength},
-                            {rightBorderPos, bottomBorderPos - tickLength}, color));
+    ticks.push_back(GuiLine({rightBorderPos, bottomBorderPos + m_tickLength},
+                            {rightBorderPos, bottomBorderPos - m_tickLength}, color));
     label.str("");
     label << std::setprecision(3) << offset + increment;
     labels.push_back(GuiText(label.str(),
@@ -1678,23 +1663,23 @@ Plot2D::GetPlotBorderTickLines(IWindow& window, Color color)
 
         // Add tick line
         ticks.push_back(
-            GuiLine({leftBorderPos - tickLength, y}, {leftBorderPos + tickLength, y}, color));
+            GuiLine({leftBorderPos - m_tickLength, y}, {leftBorderPos + m_tickLength, y}, color));
 
         // Add tick label
         label.str("");
         label << std::setprecision(3) << offset;
         labels.push_back(GuiText(
             label.str(),
-            {(int)max(10, leftBorderPos - avgCharWidth * (label.str().size() + 1) - tickLength), y - 2},
+            {(int)max(10, leftBorderPos - avgCharWidth * (label.str().size() + 1) - m_tickLength), y - 2},
             1, color, Orientation::HORIZONTAL));
     }
-    ticks.push_back(GuiLine({leftBorderPos - tickLength, topBorderPos},
-                            {leftBorderPos + tickLength, topBorderPos}, color));
+    ticks.push_back(GuiLine({leftBorderPos - m_tickLength, topBorderPos},
+                            {leftBorderPos + m_tickLength, topBorderPos}, color));
     label.str("");
     label << std::setprecision(3) << offset;
     labels.push_back(GuiText(
         label.str(),
-        {(int)max(10, leftBorderPos - avgCharWidth * (label.str().size() + 1) - tickLength), topBorderPos - 2}, 1,
+        {(int)max(10, leftBorderPos - avgCharWidth * (label.str().size() + 1) - m_tickLength), topBorderPos - 2}, 1,
         color, Orientation::HORIZONTAL));
 
     return {ticks, labels};
