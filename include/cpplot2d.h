@@ -736,15 +736,13 @@ class Plot2D
     void HandleZoomDrag(IWindow& w, Point mousePos);
     void HandlePanDrag(IWindow& w, Point mousePos);
     void Zoom(WindowRect rect, IWindow& w);
-    bool IsPointInsideViewport(const Point& p, IWindow& w);
+    bool IsPointInsideViewport(const Point& p);
     std::pair<float, float> GetPlotBorderOffsets();
     void SetViewportRect(const WindowRect& rect);
     void SetPlotBorderOffsets(std::pair<float, float> offsets);
-    std::pair<float, float> GetViewportToWindowScaleFactors(const int windowWidth, const int windowHeight);
-    std::pair<float, float> GetWindowToViewportScaleFactors(const int windowWidth, const int windowHeight);
-    std::pair<float, float> GetTransformedCoordinates(const int& x, const int& y,
-                                                              const int windowWidth,
-                                                              const int& windowHeight);
+    std::pair<float, float> CalculateViewportToWindowScaleFactors(const int windowWidth, const int windowHeight);
+    std::pair<float, float> CalculateWindowToViewportScaleFactors(const int windowWidth, const int windowHeight);
+    std::pair<float, float> GetTransformedCoordinates(const int& x, const int& y);
     void UpdatePlotWindowState(WindowState* windowState, IWindow& window);
     void InitializePlotState(WindowState* windowState);
     GuiPolyline GetDataPolyline(const LineSeries& series, IWindow& window);
@@ -764,6 +762,11 @@ class Plot2D
     std::pair<float, float> m_plotBorderOffsets;        // offsets from window edge to plot area
 
     WindowRect m_viewportRect = {0,0,0,0};              // current viewport in window space
+    
+    // scale factors to convert viewport coords to window coords
+    std::pair<float, float> m_viewportToWindowScaleFactors = {1.0f, 1.0f};
+    // scale factors to convert window coords to viewport coords
+    std::pair<float, float> m_windowToViewportScaleFactors = {1.0f, 1.0f};
 
     // Runtime view (what is currently shown)
     std::pair<float, float> m_viewZero = {0.0f, 0.0f};  // data-space lower-left of current view
@@ -1323,12 +1326,12 @@ void Plot2D::Win32Window::DrawWindowState()
     HDC hdc = BeginPaint(m_hwnd, &ps);
 
     // Fill background
-    HBRUSH blackBrush = CreateSolidBrush(ToWin32Color(m_windowState->background));
-    FillRect(m_backBuffer.backDC, &rect, blackBrush);
-    DeleteObject(blackBrush);
+    HBRUSH backgroundBrush = CreateSolidBrush(ToWin32Color(m_windowState->background));
+    FillRect(m_backBuffer.backDC, &rect, backgroundBrush);
+    DeleteObject(backgroundBrush);
 
     // Draw Polylines
-    std::map<Color, HPEN> brushes;  // HPEN hashmap
+    std::map<Color, HPEN> brushes;  // HPEN map
     HPEN hpen = nullptr;
     std::map<Color, HPEN>::iterator it;
     for (const GuiPolyline& polyline : m_windowState->polylines)
@@ -1421,7 +1424,8 @@ void Plot2D::Win32Window::InvalidateRegion(const Plot2D::WindowRect& windowRect,
     RECT win32Rect;
     GetClientRect(m_hwnd, &win32Rect);
 
-    // Universal coords assume origin at bottom left and extend up. Win32 is the opposite
+    // Universal coords assume origin at bottom left and extend up.
+    // Win32 is the opposite, so reverse the Y coords.
     const RECT rect = {windowRect.left, win32Rect.bottom - windowRect.top, windowRect.right,
                        win32Rect.bottom - windowRect.bottom};
     InvalidateRect(m_hwnd, &rect, FALSE);
@@ -1484,8 +1488,6 @@ Plot2D::Plot2D(const std::string& title, const std::string& xLabel, const std::s
     viewMenuButtons["Reset View"] = [this]() { this->OnResetViewClicked(*m_window); };
     m_window->AddMenuButtons("View", viewMenuButtons);
     
-    // Initial update of plot window state
-    UpdatePlotWindowState(m_plotWindowState.get(), *m_window);
 }
 
 void Plot2D::UpdateOffsets(const std::vector<float>& x, const std::vector<float>& y)
@@ -1502,7 +1504,7 @@ void Plot2D::UpdateOffsets(const std::vector<float>& x, const std::vector<float>
         if (p.second < m_smallestDataPoints.second) m_smallestDataPoints.second = p.second;
     }
 
-    // The data span is the differnce between the largest and smallest points
+    // The data span is the difference between the largest and smallest points
     m_dataSpans.first = max((m_largestDataPoints.first - m_smallestDataPoints.first), m_dataSpans.first);
     m_dataSpans.second = max((m_largestDataPoints.second - m_smallestDataPoints.second), m_dataSpans.second);
 
@@ -1519,6 +1521,14 @@ void Plot2D::UpdateOffsets(const std::vector<float>& x, const std::vector<float>
     m_defaultViewZero = m_viewZero;
     m_defaultViewSpanX = m_viewSpanX;
     m_defaultViewSpanY = m_viewSpanY;
+
+    
+    // Calculate scale factors for coordinate transformations (only needs to be recalculated on
+    // resize)
+    m_viewportToWindowScaleFactors =
+        CalculateViewportToWindowScaleFactors(defaultWindowSize.first, defaultWindowSize.second);
+    m_windowToViewportScaleFactors =
+        CalculateWindowToViewportScaleFactors(defaultWindowSize.first, defaultWindowSize.second);
  
 }
 
@@ -1701,7 +1711,7 @@ std::vector<Plot2D::GuiText> Plot2D::GetPlotLabels(IWindow& window, Color color)
 
     return labels;
 }
-inline std::pair<float, float> Plot2D::GetViewportToWindowScaleFactors(const int windowWidth, const int windowHeight)
+inline std::pair<float, float> Plot2D::CalculateViewportToWindowScaleFactors(const int windowWidth, const int windowHeight)
 {
     const float xPlotSpan = windowWidth - 2 * m_plotBorderOffsets.first;
     const float yPlotSpan = windowHeight - 2 * m_plotBorderOffsets.second;
@@ -1713,7 +1723,7 @@ inline std::pair<float, float> Plot2D::GetViewportToWindowScaleFactors(const int
     float yScale = viewSpanY / yPlotSpan;
     return {xScale, yScale};
 }
-inline std::pair<float, float> Plot2D::GetWindowToViewportScaleFactors(const int windowWidth,
+inline std::pair<float, float> Plot2D::CalculateWindowToViewportScaleFactors(const int windowWidth,
                                                                        const int windowHeight)
 {
     const float xPlotSpan = windowWidth - 2 * m_plotBorderOffsets.first;
@@ -1730,8 +1740,6 @@ inline std::pair<float, float> Plot2D::GetWindowToViewportScaleFactors(const int
 Plot2D::GuiPolyline Plot2D::GetDataPolyline(const LineSeries& series, IWindow& window)
 {
     WindowRect rect = window.GetRect();
-    std::pair<float, float> scales = GetWindowToViewportScaleFactors(rect.right, rect.top);
-
     std::vector<uint8_t> pixel_mask(rect.top * rect.right, 0);
     std::vector<Point> to_draw;
     to_draw.reserve(series.x.size());
@@ -1742,14 +1750,14 @@ Plot2D::GuiPolyline Plot2D::GetDataPolyline(const LineSeries& series, IWindow& w
     for (int i = 0; i < series.x.size(); i++)
     {
         point = {series.x[i], series.y[i]};
-        transformedPoint = {static_cast<int>(((point.first - m_viewZero.first) * scales.first) +
+        transformedPoint = {static_cast<int>(((point.first - m_viewZero.first) * m_windowToViewportScaleFactors.first) +
                                              m_plotBorderOffsets.first),
-                            static_cast<int>(((point.second - m_viewZero.second) * scales.second) +
+                            static_cast<int>(((point.second - m_viewZero.second) *
+                                              m_windowToViewportScaleFactors.second) +
                                              m_plotBorderOffsets.second)};
 
         // Bounds-check index before writing mask
-        if (transformedPoint.first < m_viewportRect.left || transformedPoint.first >= m_viewportRect.right ||
-            transformedPoint.second < m_viewportRect.bottom || transformedPoint.second >= m_viewportRect.top)
+        if (!IsPointInsideViewport(transformedPoint))
             continue;
 
         // Check if pixel already set in mask. If not, add to draw list and set mask
@@ -1792,9 +1800,15 @@ void Plot2D::OnWindowResizeCallback(IWindow& window)
                                                  size.second * m_plotBorderOffsetFactor});
     SetViewportRect(WindowRect(size.second - verticalOffset, horizontalOffset,
                                size.first - horizontalOffset, verticalOffset));
+
+    
+    m_viewportToWindowScaleFactors = CalculateViewportToWindowScaleFactors(size.first, size.second);
+    m_windowToViewportScaleFactors = CalculateWindowToViewportScaleFactors(size.first, size.second);
+
     // TODO: Use binning to reduce number of points drawn for large datasets
     UpdatePlotWindowState(m_plotWindowState.get(), *m_window);
     window.Invalidate(m_plotWindowState.get());
+
     
 }
 void Plot2D::OnWindowResizeEndCallback(IWindow& window)
@@ -1807,18 +1821,21 @@ void Plot2D::OnWindowResizeEndCallback(IWindow& window)
                                                  size.second * m_plotBorderOffsetFactor});
     SetViewportRect(WindowRect(size.second - verticalOffset, horizontalOffset,
                                size.first - horizontalOffset, verticalOffset));
+
+    
+    m_viewportToWindowScaleFactors = CalculateViewportToWindowScaleFactors(size.first, size.second);
+    m_windowToViewportScaleFactors = CalculateWindowToViewportScaleFactors(size.first, size.second);
+
     UpdatePlotWindowState(m_plotWindowState.get(), *m_window);
     window.Invalidate(m_plotWindowState.get());
 }
 
-std::pair<float, float> Plot2D::GetTransformedCoordinates(const int& x, const int& y,
-                                                                         const int windowWidth,
-                                                                         const int& windowHeight)
+std::pair<float, float> Plot2D::GetTransformedCoordinates(const int& x, const int& y)
 {
-    std::pair<float, float> scales = GetViewportToWindowScaleFactors(windowWidth, windowHeight);
     auto coordinates =  std::pair<float, float>(
-        (x - m_plotBorderOffsets.first) * scales.first + m_viewZero.first,
-        ((y - m_plotBorderOffsets.second) * scales.second + m_viewZero.second));
+        (x - m_plotBorderOffsets.first) * m_viewportToWindowScaleFactors.first + m_viewZero.first,
+        ((y - m_plotBorderOffsets.second) * m_viewportToWindowScaleFactors.second +
+         m_viewZero.second));
 
     return coordinates;
 }
@@ -1840,11 +1857,10 @@ void Plot2D::OnMouseMoveCallback(IWindow& w, Point mousePos)
 void Plot2D::HandlePanDrag(IWindow& w, Point mousePos)
 {
     std::pair<int, int> windowSize = w.GetRect().Size();
-    std::pair<float, float> scales =
-        GetViewportToWindowScaleFactors(windowSize.first, windowSize.second);
     // Calculate mouse movement delta in data coords
-    float deltaX = (m_lastMousePos.first - mousePos.first) * scales.first;
-    float deltaY = (m_lastMousePos.second - mousePos.second) * scales.second;
+    float deltaX = (m_lastMousePos.first - mousePos.first) * m_viewportToWindowScaleFactors.first;
+    float deltaY =
+        (m_lastMousePos.second - mousePos.second) * m_viewportToWindowScaleFactors.second;
     // Update view offsets
     m_viewZero.first += deltaX;
     m_viewZero.second += deltaY;
@@ -1865,7 +1881,7 @@ void Plot2D::HandleZoomDrag(IWindow& w,
     m_plotWindowState->rects = {(GuiRect({x1, y2}, {x2, y1}, Color::Yellow()))};
     w.Invalidate(m_plotWindowState.get());
 }
-inline bool Plot2D::IsPointInsideViewport(const Point& p, IWindow& w)
+inline bool Plot2D::IsPointInsideViewport(const Point& p)
 {
     return (p.first >= m_viewportRect.left && p.first <= m_viewportRect.right) &&
            (p.second >= m_viewportRect.bottom && p.second <= m_viewportRect.top);
@@ -1883,10 +1899,9 @@ void Plot2D::HandleMouseHover(IWindow& w, Point mousePos)
     // 250 wide and 30 high
     WindowRect mouseCoordinateRect(rect.top, rect.left, rect.left + 250, rect.top - 30);
 
-    if (IsPointInsideViewport(mousePos, w))
+    if (IsPointInsideViewport(mousePos))
     {
-        auto transformedCoords = GetTransformedCoordinates(mousePos.first, mousePos.second,
-                                                           rect.Size().first, rect.Size().second);
+        auto transformedCoords = GetTransformedCoordinates(mousePos.first, mousePos.second);
 
         char buf[64];
         int n = _snprintf_s(buf, sizeof(buf), _TRUNCATE, "(X, Y) = (%.3g, %.3g)",
@@ -1911,7 +1926,7 @@ void Plot2D::HandleMouseHover(IWindow& w, Point mousePos)
 
 void Plot2D::OnMouseLButtonDownCallback(IWindow& w, Point mousePos)
 {
-    if (!IsPointInsideViewport(mousePos, w))
+    if (!IsPointInsideViewport(mousePos))
     {
         return;
     }
@@ -1961,7 +1976,7 @@ void Plot2D::Zoom(WindowRect zoomRect, IWindow& w)
     // Set plot view to match rectangle
     std::pair<int, int> windowSize = w.GetRect().Size();
     std::pair<float, float> scales =
-        GetViewportToWindowScaleFactors(windowSize.first, windowSize.second);
+        CalculateViewportToWindowScaleFactors(windowSize.first, windowSize.second);
     m_viewZero.first =
         (zoomRect.left - m_plotBorderOffsets.first) * scales.first + m_viewZero.first;
     m_viewZero.second =

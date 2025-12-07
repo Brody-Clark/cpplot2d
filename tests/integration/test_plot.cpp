@@ -4,8 +4,8 @@
 #ifdef _WIN32
 int main()
 {
-    std::vector<float> x(2000000);
-    std::vector<float> y(2000000);
+    std::vector<float> x(200000);
+    std::vector<float> y(200000);
     std::vector<float> x2(200000);
     std::vector<float> y2(200000);
     for (int i = 0; i < 100000; i++)
@@ -13,7 +13,7 @@ int main()
         x[i] = static_cast<float>(i) * 0.1f * -1;
         y[i] = static_cast<float>(i) * 0.1f * -1;
         x2[i] = static_cast<float>(i) * 0.15f;
-        y2[i] = static_cast<float>(i) * 0.15f;
+        y2[i] = static_cast<float>(i) * 0.15f /(i+1);
     }
     for (int i = 100000; i < 200000; i++)
     {
