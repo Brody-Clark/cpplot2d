@@ -6,9 +6,9 @@
 
 ## About
 
-**cpplot2d** is a cross-platform, header-only 2D plotting library for C++. It enables quick visualization of real-valued datasets through basic line plots. The library is:
+**cpplot2d** is a cross-platform, header-only 2D plotting library for C++ designed for speed and simplicity. The library is:
 
-- Simple to use
+- Easy to use with a single header file to include and simple API
 - Self-contained (no external dependencies)
 - Capable of displaying plots or saving them as `.png` images
 - Responsive even with large datasets
@@ -39,7 +39,7 @@ int main()
     std::vector<float> x = {1,2,3};
     std::vector<float> y = {1,2,3};
 
-    // Create plot object and add a green line 
+    // Create plot object and add a line 
     cpplot2d::Plot2D plot;
     plot.AddLine(x, y, cpplot2d::Color::FromRGB(0, 255, 0));
     
@@ -57,13 +57,13 @@ int main()
 
 int main()
 {
-    // Create dataset as 2-D vector of any numeric type
+    // Create datasets
     std::vector<float> x1 = {1,2,3};
     std::vector<float> y1 = {1,2,3};
     std::vector<float> x2 = {4,5,6};
     std::vector<float> y2 = {4,5,6};
 
-    // Create plot object and add a green line 
+    // Create plot object and add 2 lines 
     cpplot2d::Plot2D plot;
     plot.AddLine(x1, y1, cpplot2d::Color::FromRGB(0, 255, 0))
         .AddLine(x2, y2, cpplot2d::Color::FromRGB(255, 255, 0));
