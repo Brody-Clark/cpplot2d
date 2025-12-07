@@ -1,4 +1,4 @@
-# cxpplot
+# cpplot2d
 
 > [!IMPORTANT]
 > **Project Status: In Progress**
@@ -6,7 +6,7 @@
 
 ## About
 
-**cxpplot** is a cross-platform, header-only 2D plotting library for C++. It enables quick visualization of real-valued datasets through basic line plots. The library is:
+**cpplot2d** is a cross-platform, header-only 2D plotting library for C++. It enables quick visualization of real-valued datasets through basic line plots. The library is:
 
 - Simple to use
 - Self-contained (no external dependencies)
@@ -20,21 +20,10 @@
 
 ## Usage
 
-1. Copy the header file from `include/cxpplot.h` and include it in your project:
+Simply copy the header file from `include/cpplot2d.h` and include it in your project:
 ```cpp
-#include "cxpplot/cxpplot.h"
+#include "cpplot2d/cpplot2d.h"
 ```
-
-2. Build Instructions by Platform:
-
-- **Windows**
-    - Use the `WinMain` function as the entry point for your application and Build your project with the Windows subsystem
-    - In your project settings, set the **Linker System** to **Windows**.
-- **macOS**
-    - Use the standard `main()` entry point
-    - Requires Objective-C++ (.mm files)
-- **Linux**
-    - ⚠️ X11-based support is in progress ⚠️
 
 ## Examples
 
@@ -42,21 +31,21 @@
 
 ```cpp
 
-#include "cxpplot.h"
+#include "cpplot2d.h"
 
-int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine, int CmdShow)
+int main()
 {
     // Create dataset as 2-D vector of any numeric type
     std::vector<float> x;
     std::vector<float> y;
 
-    // Call plot function with default labels ('x', 'y') and default tile ('Plot')
-    cxpplot::Plot2D plot(x, y);
+    // Create plot object and add a green line 
+    cpplot2d::Plot2D plot;
+    plot.AddLine(x, y, cpplot2d::Color::FromRGB(0, 255, 0));
+    
+    // Show the plot
     plot.Show();
 
-    // Call plot function with custom axis labels and title
-    cxpplot::Plot2D plot(x, y, "distance", "time", "Distance vs Time");
-    plot.Show();
 }
 
 ```
@@ -65,7 +54,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine,
 
 ```cpp
 
-#include "cxpplot.h"
+#include "cpplot2d.h"
 
 int main(int argc, const char * argv[])
 {
@@ -73,12 +62,11 @@ int main(int argc, const char * argv[])
     std::vector<float> x;
     std::vector<float> y;
 
-    // Call plot function with default labels ('x', 'y') and default tile ('Plot')
-    cxpplot::Plot2D plot(x, y);
-    plot.Show();
-
-    // Call plot function with custom axis labels and title
-    cxpplot::Plot2D plot(x, y, "distance", "time", "Distance vs Time");
+    // Create plot object and add a green line 
+    cpplot2d::Plot2D plot;
+    plot.AddLine(x, y, cpplot2d::Color::FromRGB(0, 255, 0));
+    
+    // Show the plot
     plot.Show();
 }
 
