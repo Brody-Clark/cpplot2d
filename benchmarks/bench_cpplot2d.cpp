@@ -35,13 +35,13 @@ class Plot2DBenchmark : public cpplot2d::Plot2D
         void DrawWindowState() override
         {
         }
-        void InvalidateRegion(const WindowRect& rect, const WindowState& windowState) override
+        void InvalidateRegion(const WindowRect& rect, WindowState* windowState) override
         {
         }
         void AddMenuButtons(const std::string menu, MenuButtons menuButtons) override
         {
         }
-        void Invalidate(std::shared_ptr<WindowState> windowState) override
+        void Invalidate(WindowState* windowState) override
         {
         }
         bool SaveScreenshotAsPNG(const std::string& fileName) override
