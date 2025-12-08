@@ -20,14 +20,50 @@
 
 ## Usage
 
-Simply copy the header file from `include/cpplot2d.h` and include it in your project:
+### Windows/Linux
+
+Simply copy the header file from `include/cpplot2d.h` and include it in your project and define the macro `CPPLOT2D_IMPLEMENTATION` once before the inlcude statement. Only in **one** C++ source file (`.cpp` or `.cxx`), you must define the implementation macro before including the header. This generates the function definitions.
+
 ```cpp
-#include "cpplot2d/cpplot2d.h"
+#define CPPLOT2D_IMPLEMENTATION  // In ONE file only (e.g., main.cpp or cpplot2d_impl.cpp)
+#include "cpplot2d.h"
+```
+
+In all other files, simply include the header as needed:
+
+```cpp
+// In all other files
+#include "cpplot2d.h"
+```
+
+### Apple
+
+The macOS backend uses the Cocoa API, which requires the Objective-C++ compiler.
+
+1. Install Command Line Tools: Install the necessary compiler and SDK components if you do not already have them:
+
+```bash
+xcode-select --install
+```
+
+2. Create an Implementation File: You must define the implementation macro in a source file that is compiled as Objective-C++ (by using the `.mm` extension).
+
+```cpp
+// In ONE file only (must be a .mm file on macOS. e.g., main.mm or cpplot2d_impl.mm)
+#define CPPLOT2D_IMPLEMENTATION
+#include "cpplot2d.h"
+```
+
+Then in your other files, simply include the `cpplot2d.h` header as needed.
+
+```cpp
+// In all other files
+#include "cpplot2d.h"
 ```
 
 ## Examples
 
-**Simple line plot**
+### Simple line plot
 
 ```cpp
 
@@ -49,7 +85,7 @@ int main()
 }
 ```
 
-**Multiple Lines**
+### Multiple Lines
 
 ```cpp
 
@@ -74,9 +110,13 @@ int main()
 }
 ```
 
+---
+
 **Sample plot:**
 
 !["Demo Screenshot"](docs/PlotDemo.png)
+
+---
 
 ## Contributing
 

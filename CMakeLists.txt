@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.15)
-project(ccplot2d LANGUAGES CXX)
+project(ccplot2d LANGUAGES CXX OBJCXX)
 
 # === Header-only library ===
 add_library(cpplot2d INTERFACE)
@@ -13,11 +13,20 @@ target_include_directories(cpplot2d INTERFACE
 target_compile_features(cpplot2d INTERFACE cxx_std_17)
 
 # === Integration test executable ===
-add_executable(test_plot
-    tests/integration/test_plot.cpp
-)
+# Integration tests
+if (APPLE)
+    add_executable(test_plot_mac tests/integration/test_plot.mm)
 
-target_link_libraries(test_plot PRIVATE cpplot2d)
+    target_link_libraries(test_plot_mac PRIVATE
+        cpplot2d
+        "-framework Cocoa"
+        "-framework CoreGraphics" 
+    )
+
+else()
+    add_executable(test_plot tests/integration/test_plot.cpp)
+    target_link_libraries(test_plot PRIVATE cpplot2d)
+endif()
 
 # === Unit tests with Catch2 ===
 # Option 1: Use FetchContent to grab Catch2 automatically
