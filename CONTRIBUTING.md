@@ -1,6 +1,7 @@
 # Contributing to cpplot2d
 
-Table of Contents
+Table of Contents:
+
 - 
 
 ## Code Style and Quality

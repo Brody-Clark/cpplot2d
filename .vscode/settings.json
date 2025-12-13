@@ -1,0 +1,12 @@
+{
+    "files.associations": {
+        "*.mm": "cpp"
+    },
+    "C_Cpp.files.exclude": {
+
+        "**/.vscode": true,
+        "**/.vs": true
+    },
+    "C_Cpp.default.compilerPath": "/usr/bin/clang++",
+    "C_Cpp.default.intelliSenseMode": "clang-x64"
+}
