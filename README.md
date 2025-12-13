@@ -2,6 +2,7 @@
 
 > [!IMPORTANT]
 > **Project Status: In Progress**
+> <br>
 > _This project is actively being developed. Some features are incomplete or experimental._
 
 ## About
@@ -110,40 +111,16 @@ int main()
 }
 ```
 
----
-
 **Sample plot:**
 
 !["Demo Screenshot"](docs/PlotDemo.png)
 
 ---
 
+
 ## Contributing
 
-Contributions are welcome! Please follow these steps when contributing:
-
-### Code Style
-
-This project uses clang-format for consistent code style.
-
-- Ensure code is formatted before submitting a pull request
-- The formatting configuration is defined in the .clang-format file in the repo root
-
-To format your code automatically:
-
-```sh
-clang-format -i path/to/file.cpp
-```
-
-A handy git alias to format all staged files with a simple "format" command:
-
-```sh
-alias format="git diff --cached --name-only --diff-filter=ACMRTUXB | grep -E '\.(cpp|cc|c|h|hpp)$' | xargs clang-format -i"
-```
-
-### Testing
-
-Unit tests are located in the tests/ directory. (WIP — contributions welcome.)
+Contributions are welcome! Please see [CONTRIBUTING.md](./CONTRIBUTING.md) for more info.
 
 ## License
 
