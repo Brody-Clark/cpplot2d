@@ -12,7 +12,7 @@ int main()
         x[i] = static_cast<float>(i) * 0.1f * -1;
         y[i] = static_cast<float>(i) * 0.1f * -1;
         x2[i] = static_cast<float>(i) * 0.15f;
-        y2[i] = static_cast<float>(i) * 0.15f /(i+1);
+        y2[i] = static_cast<float>(i) * 0.15f / (i + 1);
     }
     for (int i = 100000; i < 200000; i++)
     {
@@ -21,7 +21,7 @@ int main()
         x2[i] = static_cast<float>(i) * 0.15f * -1;
         y2[i] = static_cast<float>(i) * 0.15f * -1;
     }
-    cpplot2d::Plot2D plot;
+    cpplot2d::Plot2D plot("Plot", "test_y", "test_x");
     plot.AddLine(x, y, cpplot2d::Color::FromRGB(0, 255, 0))
         .AddLine(x2, y2, cpplot2d::Color::FromRGB(255, 0, 0));
     plot.Show();

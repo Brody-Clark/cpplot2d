@@ -13,11 +13,11 @@ class Plot2DBenchmark : public cpplot2d::Plot2D
         Plot2D::GuiPolyline TestGetDataPolyline(const std::vector<float>& x,
                                                 const std::vector<float>& y,
                                                 cpplot2d::Color color, 
-                                                IWindow& window)
+                                                const WindowRect& rect)
         {
             LineSeries series(x, y, cpplot2d::Color::Black(), 1);
            
-            return GetDataPolyline(series, window);
+            return GetDataPolyline(series, rect);
         }
 
     // Minimal mock window implementation
@@ -31,9 +31,6 @@ class Plot2DBenchmark : public cpplot2d::Plot2D
         int GetAverageCharWidth() override
         {
             return 8;
-        }
-        void DrawWindowState() override
-        {
         }
         void InvalidateRegion(const WindowRect& rect, WindowState* windowState) override
         {
@@ -92,7 +89,7 @@ static void BM_GetDataPolyline(benchmark::State& state)
 
     for (auto _ : state)
     {
-        auto poly = plot.TestGetDataPolyline(xs, ys, cpplot2d::Color::Green(), mockWindow);
+        auto poly = plot.TestGetDataPolyline(xs, ys, cpplot2d::Color::Green(), mockWindow.GetRect());
         benchmark::DoNotOptimize(poly);
     }
 }
