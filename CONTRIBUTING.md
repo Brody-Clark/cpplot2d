@@ -2,11 +2,18 @@
 
 Table of Contents:
 
-- 
+- [Code Style and Quality](#code-style-and-quality)
+  - [Formatting with Clang-Format](#formatting-with-clang-format)
+  - [Code Quality and Static Analysis with Clang-Tidy](#code-quality-and-static-analysis-with-clang-tidy)
+- [Testing](#testing)
+- [How to Create a Pull Request](#how-to-create-a-pull-request)
+  - [The Workflow](#the-workflow)
+  - [Pull Request Requirements](#pull-request-requirements)
+  - [PR Title and Summary](#pr-title-and-summary)
 
 ## Code Style and Quality
 
-### Formatting
+### Formatting with Clang-Format
 
 To ensure uniform code style across the entire library, this project uses **Clang-Format**. This tool automatically adjusts spacing, indentation, line breaks, and brace styles according to a predefined configuration.
 
@@ -47,30 +54,25 @@ It is strongly encouraged that contributors set up their IDE or text editor to r
 
 ### Code Quality and Static Analysis with Clang-Tidy
 
-The checks Clang-Tidy performs are governed by the `.clang-tidy` configuration file, which defines which categories of checks are enabled (e.g., `bugprone-*`, `readability-*`, `modernize-*`).
+The checks clang-tidy performs are governed by the `.clang-tidy` configuration file, which defines which categories of checks are enabled (e.g., `bugprone-*`, `readability-*`, `modernize-*`).
 
-### Integration with CMake
+#### Running clang-tidy
 
-Clang-Tidy is integrated directly into the build process using CMake's toolchain features. When you build the project locally, Clang-Tidy runs automatically on the files that are being compiled.
+For simplicity, a python script `run_tidy.py` runs clang-tidy on target files `clang_tidy_cpp.cpp` and `clang_tidy_objc.mm` to target both the cpp and objc code in the library.
 
-To run the full suite of checks locally, use the following CMake command during configuration:
+To run this script, make sure you have python installed and the project is built using:
 
-```bash
-# Configure the build directory
-cmake -B build -DCMAKE_CXX_CLANG_TIDY='clang-tidy;--config-file=${workspaceFolder}/.clang-tidy'
-```
-
-Then, run the build:
-
-```bash
+```sh
 cmake --build build
 ```
 
-Any warnings or errors reported by Clang-Tidy must be resolved before your code can be merged.
+then run the tidy script using:
 
-### Pull Request Requirements
+```sh
+python3 run_tidy.py
+```
 
-The CI pipeline for every Pull Request will automatically run both Clang-Format and Clang-Tidy.
+Any errors reported by clang-tidy must be resolved before your code can be merged.
 
 **A PR will not be merged if:**
 
@@ -80,3 +82,39 @@ The CI pipeline for every Pull Request will automatically run both Clang-Format 
 ## Testing
 
 Unit tests are located in the tests/ directory. (WIP — contributions welcome.)
+
+## How to Create a Pull Request
+
+This project follows a trunk-based development strategy, meaning all changes are merged directly into the `main` branch frequently. This requires small, focused, and well-described PRs.
+
+### The Workflow
+
+1. **Branching:** Create a new feature branch off of the latest `main` branch.
+
+```sh
+    git checkout main
+    git pull origin main
+    git checkout -b feature/my-new-feature-name
+```
+
+2. **Commit:** Write clear, descriptive commit messages locally. Commit your changes frequently and squash minor work-in-progress commits before pushing, if necessary, to keep the history clean.
+3. **Push:** Push your local feature branch to the remote repository.
+4. **Open PR:** Open a Pull Request targeting the **`main`** branch.
+
+### Pull Request Requirements
+
+A PR will not be reviewed or merged until the following criteria are met:
+
+* **Passing Checks:** All Continuous Integration (CI) checks—including **Clang-Format** and **Clang-Tidy**—must pass. (see previous sections for information on clang-tidy and clang-format)
+* **Unit Tests:** All existing unit tests must pass, and new unit tests must be added to cover the new functionality or fixes.
+* **Atomic Changes:** The PR must represent the smallest possible unit of work. Large PRs will be sent back for splitting.
+
+### PR Title and Summary
+
+The quality of the PR description is key to fast reviews. Please ensure your PR summary includes:
+
+| Component | Requirement | Example |
+| :--- | :--- | :--- |
+| **Title** | Clear & concise description of the main change. | `feat: Added Color initializers` |
+| **Summary** | Brief summary of the changes and why they were made. | "Refactors `Color` struct to use C++17 default member initializers and adds unit tests for common colors. Fixes issue with non-opaque default alpha." |
+| **Linked Issues** | If applicable, reference to any related issue (e.g., `Fixes #123`). | `Fixes #42` |
