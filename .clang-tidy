@@ -1,0 +1,19 @@
+Checks: >
+  bugprone-*,
+  -bugprone-easily-swappable-parameters,
+  clang-analyzer-*,
+  cppcoreguidelines-pro-type-member-init,
+  performance-move-const-arg,
+  modernize-use-override,
+  modernize-use-nullptr,
+  modernize-loop-convert,
+  readability-redundant-declaration,
+  readability-else-after-return,
+  readability-inconsistent-declaration-parameter-name,
+  
+  -*-Werror
+
+WarningsAsErrors: '*'
+
+# Exclude third-party headers from being checked
+HeaderFilterRegex: '^(?!.*(third_party|external|vendor)/).*'
