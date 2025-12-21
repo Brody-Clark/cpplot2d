@@ -15,7 +15,6 @@ target_include_directories(cpplot2d INTERFACE
 target_compile_features(cpplot2d INTERFACE cxx_std_17)
 
 # === Integration test executable ===
-# Integration tests
 if (APPLE)
     add_executable(test_plot_mac tests/integration/test_plot.mm)
 
@@ -31,7 +30,6 @@ else()
 endif()
 
 # === Unit tests with Catch2 ===
-# Option 1: Use FetchContent to grab Catch2 automatically
 include(FetchContent)
 FetchContent_Declare(
     catch2

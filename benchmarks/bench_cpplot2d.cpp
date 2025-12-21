@@ -28,9 +28,9 @@ class Plot2DBenchmark : public cpplot2d::Plot2D
         {
         }
 
-        int GetAverageCharWidth() override
+        Dimension2d GetAverageCharSize() override
         {
-            return 8;
+            return {5, 5};
         }
         void InvalidateRegion(const WindowRect& rect, WindowState* windowState) override
         {

@@ -9,6 +9,15 @@
             "args": [],
             "cwd": "${workspaceFolder}",
             "preLaunchTask": "CMake: build",
+        },
+        {
+            "name": "C++ Debug (Windows/Linux)",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/build/test_plot",
+            "args": [],
+            "cwd": "${workspaceFolder}",
+            "preLaunchTask": "CMake: build",
         }
     ]
 }
