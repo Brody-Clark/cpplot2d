@@ -198,8 +198,14 @@ struct GuiText
 {
    public:
     GuiText(const std::string& text, const Point pos, int spacing, const Color& color,
-            Orientation orientation, int size = 10)
-        : text(text), pos(pos), spacing(spacing), color(color), orientation(orientation), size(size)
+            Orientation orientation, int size = 10, std::string font = "Tahoma")
+        : text(text),
+          pos(pos),
+          spacing(spacing),
+          color(color),
+          orientation(orientation),
+          size(size),
+          font(font)
     {
     }
     GuiText() = default;
@@ -207,6 +213,7 @@ struct GuiText
     Point pos = {-1, -1};
     int spacing = 1;
     int size = 10;
+    std::string font = "Tahoma";
     Color color = Color::White();
     Orientation orientation = Orientation::HORIZONTAL;
 };
@@ -228,6 +235,23 @@ struct GuiRect
     Point topLeft = {-1, -1};
     Point bottomRight = {-1, -1};
     // Color fillColor;
+    Color borderColor = Color::White();
+    int borderWidth = 1;
+};
+
+struct GuiFrame
+{
+   public:
+    GuiFrame(Point topLeft, Point bottomRight, Color borderColor, int borderWidth = 1)
+        : topLeft(topLeft),
+          bottomRight(bottomRight),
+          borderColor(borderColor),
+          borderWidth(borderWidth)
+    {
+    }
+    GuiFrame() = default;
+    Point topLeft = {-1, -1};
+    Point bottomRight = {-1, -1};
     Color borderColor = Color::White();
     int borderWidth = 1;
 };
@@ -836,7 +860,6 @@ class Plot2D
     void OnToggleZoomClicked(IWindow& window);
     void OnToggleGrabClicked(IWindow& window);
     void OnResetViewClicked(IWindow& window);
-    void OnWindowResizeEndCallback(IWindow& window);
     void HandleMouseHover(IWindow& w, Point mousePos);
     void HandleZoomDrag(IWindow& w, Point mousePos);
     GuiText GetInteractionText(const std::string& label, WindowRect rect);
@@ -846,12 +869,12 @@ class Plot2D
     std::pair<float, float> GetPlotBorderOffsets();
     void SetViewportRect(const WindowRect& rect);
     void SetPlotBorderOffsets(std::pair<float, float> offsets);
-    std::pair<float, float> CalculateViewportToWindowScaleFactors(const Dimension2d& windowSize);
-    std::pair<float, float> CalculateWindowToViewportScaleFactors(const Dimension2d& windowSize);
+    void UpdateViewportWindowScaleFactors(const Dimension2d& windowSize);
+    Pointf GetViewportToWindowScaleFactor(const Dimension2d& windowSize);
     std::pair<float, float> GetTransformedCoordinates(Point coord);
     void UpdatePlotWindowState(WindowState* windowState, IWindow& window);
     void InitializePlotState(WindowState* windowState);
-    GuiPolyline GetDataPolyline(const LineSeries& series, const WindowRect&);
+    void GetDataPolyline(const LineSeries& series, const WindowRect&, GuiPolyline& output);
     Point GetIntersectionPointOnRect(const Point& p1, const Point& p2, const WindowRect& rect);
     int GetIntersectionPointsOnRect(const Point& p1, const Point& p2, const WindowRect& rect,
                                     Point& out1, Point& out2);
@@ -861,31 +884,31 @@ class Plot2D
     bool segmentsIntersect(const Point& p1, const Point& p2, const Point& p3, const Point& p4);
     bool IntersectionPoint(const Point& a, const Point& b, const Point& c, const Point& d,
                            Point& result);
-    GuiPolyline GetPlotBorderPolyline(const WindowRect&, Color color);
+    GuiRect GetPlotBorderRect(const WindowRect&, Color color);
     std::pair<std::vector<GuiLine>, std::vector<GuiText>> GetPlotBorderTickLines(const WindowRect&,
                                                                                  Color color);
     std::vector<GuiText> GetPlotLabels(const WindowRect&, Color color);
 
+    private:
     struct m_dataSeries
     {
         std::vector<LineSeries> lines = {};
         std::vector<ScatterSeries> points = {};
     } m_dataSeries;
-
-    private:
+    std::vector<Point> m_polylineBuffer = {};
     std::pair<float, float> m_plotZeroOffsets = {(std::numeric_limits<float>::max)(),
                                                  (std::numeric_limits<float>::max)()};
     std::pair<float, float> m_plotBorderOffsets = {0.f, 0.f};  // offsets from window edge to plot area
 
     WindowRect m_viewportRect = {0, 0, 0, 0};  // current viewport in window space
-
+    const std::string m_font = "Tahoma";
     // scale factors to convert viewport coords to window coords
     std::pair<float, float> m_viewportToWindowScaleFactors = {1.0f, 1.0f};
     // scale factors to convert window coords to viewport coords
     std::pair<float, float> m_windowToViewportScaleFactors = {1.0f, 1.0f};
 
     // Runtime view (what is currently shown)
-    std::pair<float, float> m_viewZero = {0.0f, 0.0f};  // data-space lower-left of current view
+    Pointf m_viewZero = {0.0f, 0.0f};  // data-space lower-left of current view
     float m_viewSpanX = 0.0f;                           // data-space width of current view
     float m_viewSpanY = 0.0f;                           // data-space height of current view
 
@@ -898,9 +921,9 @@ class Plot2D
     float m_defaultViewSpanY = 0.0f;
     Dimension2d m_charSize = {5, 5};
     static constexpr float m_plotBorderOffsetFactor = 0.125f;
-    std::string xLabel = "X";
-    std::string yLabel = "Y";
-    std::string title = "Plot";
+    std::string xLabel = "";
+    std::string yLabel = "";
+    std::string title = "";
     std::pair<float, float> m_dataSpans = {0.0f, 0.0f};
     std::pair<float, float> m_largestDataPoints = {-(std::numeric_limits<float>::max)(),
                                                    -(std::numeric_limits<float>::max)()};
@@ -960,8 +983,8 @@ class Plot2D
         HBITMAP CaptureWindowContent(HWND hwnd);
         COLORREF ToWin32Color(const Color color);
         void DoDrawText(HDC hdc, GuiText text, RECT clientRect);
-        HFONT CreateVerticalFont(HDC hdc, int pointSize);
-        HFONT Win32Window::CreateFontOfSize(HDC hdc, int pointSize);
+        HFONT CreateVerticalFont(HDC hdc, int pointSize, const std::string& font);
+        HFONT Win32Window::CreateFontOfSize(HDC hdc, int pointSize, const std::string& font);
         void ResizeBackBuffer(HWND hwnd);
 
         struct doubleBufferedDC
@@ -972,9 +995,6 @@ class Plot2D
             int bufferH = 0;
         } m_backBuffer;
 
-        // Cache fonts to prevent creating one each draw call
-        HFONT m_font14 = nullptr;
-        HFONT m_font12 = nullptr;
     };
 
 #elif defined(__linux__)
@@ -1067,7 +1087,6 @@ cpplot2d::Plot2D::Plot2D(const std::string& title, const std::string& xLabel,
     m_window->OnMouseLButtonUpCallback = [this](Point p)
     { this->OnMouseLButtonUpCallback(*m_window, p); };
     m_window->OnResizeCallback = [this]() { this->OnWindowResizeCallback(*m_window); };
-    m_window->OnResizeEndCallback = [this]() { this->OnWindowResizeEndCallback(*m_window); };
 
     // Add menu buttons
     MenuButtons fileMenuButtons;
@@ -1117,10 +1136,7 @@ void cpplot2d::Plot2D::UpdateOffsets(const std::vector<float>& x, const std::vec
 
     // Calculate scale factors for coordinate transformations (only needs to be recalculated on
     // resize)
-    m_viewportToWindowScaleFactors =
-        CalculateViewportToWindowScaleFactors({defaultWindowSize.first, defaultWindowSize.second});
-    m_windowToViewportScaleFactors =
-        CalculateWindowToViewportScaleFactors({defaultWindowSize.first, defaultWindowSize.second});
+    UpdateViewportWindowScaleFactors({defaultWindowSize.first, defaultWindowSize.second});
 }
 
 template <typename T>
@@ -1135,6 +1151,10 @@ cpplot2d::Plot2D& cpplot2d::Plot2D::AddLine(const std::vector<T>& x, const std::
     std::vector<float> yf(y.begin(), y.end());
 
     m_dataSeries.lines.emplace_back(xf, yf, color, size);
+    if (xf.size() > m_polylineBuffer.size()) m_polylineBuffer.resize(xf.size());
+
+    // Allocate polylines for all data series lines
+    m_plotWindowState->polylines.resize(m_dataSeries.lines.size());
     UpdateOffsets(xf, yf);  // Update plot offsets based on new data to make sure plot fits all data
     return *this;
 }
@@ -1142,15 +1162,14 @@ cpplot2d::Plot2D& cpplot2d::Plot2D::AddLine(const std::vector<T>& x, const std::
 void cpplot2d::Plot2D::InitializePlotState(cpplot2d::Plot2D::WindowState* windowState)
 {
     windowState->background = m_plotProperties.backgroundColor;
-    ;
-
+    
     // Preallocate space for lines
     // 10 for X and Y axis ticks
     windowState->lines.resize(10);
 
     // Preallocate space for rects
-    // 1 for zoom box
-    windowState->rects.resize(1);
+    // 1 for zoom box, 1 for plot border
+    windowState->rects.resize(2);
 
     // Preallocate space for text entries:
     // 5 for X axis ticks, 5 for Y axis ticks, 3 for labels, 1 for interaction mode info
@@ -1161,15 +1180,16 @@ void cpplot2d::Plot2D::UpdatePlotWindowState(cpplot2d::Plot2D::WindowState* wind
                                              IWindow& window)
 {
     WindowRect rect = window.GetRect();
-    // Clear zoom box rect
-    windowState->rects = {};
-    windowState->polylines.clear();
-    for (const LineSeries& series : m_dataSeries.lines)
-    {
-        windowState->polylines.push_back(GetDataPolyline(series, rect));
-    }
 
-    windowState->polylines.push_back(GetPlotBorderPolyline(rect, Color::White()));
+    // Clear zoom box rect and update plot border
+    windowState->rects.back() = {};
+    windowState->rects[0] = GetPlotBorderRect(rect, Color::White());
+
+    // Update datasets
+    for (size_t i = 0; i < m_dataSeries.lines.size(); i++)
+    {
+        GetDataPolyline(m_dataSeries.lines[i], rect, windowState->polylines[i]);
+    }
 
     std::pair<std::vector<GuiLine>, std::vector<GuiText>> ticks =
         GetPlotBorderTickLines(rect, Color::White());
@@ -1193,7 +1213,7 @@ void cpplot2d::Plot2D::UpdatePlotWindowState(cpplot2d::Plot2D::WindowState* wind
     windowState->text.back() = GetInteractionText(windowState->text.back().text, rect);
 }
 
-cpplot2d::Plot2D::GuiPolyline cpplot2d::Plot2D::GetPlotBorderPolyline(const WindowRect& rect,
+inline cpplot2d::Plot2D::GuiRect cpplot2d::Plot2D::GetPlotBorderRect(const WindowRect& rect,
                                                                       Color color)
 {
     const int leftBorderPos = rect.left + (int)m_plotBorderOffsets.first;
@@ -1201,22 +1221,12 @@ cpplot2d::Plot2D::GuiPolyline cpplot2d::Plot2D::GetPlotBorderPolyline(const Wind
     const int topBorderPos = rect.top - (int)m_plotBorderOffsets.second;
     const int bottomBorderPos = rect.bottom + (int)m_plotBorderOffsets.second;
 
-    // Bottom left corner -> top left corner -> top right corner ->
-    // Bottom right corner -> bottom left corner
-    std::vector<Point> borderPoints{{leftBorderPos, bottomBorderPos},
-                                    {leftBorderPos, topBorderPos},
-                                    {rightBorderPos, topBorderPos},
-                                    {rightBorderPos, bottomBorderPos},
-                                    {leftBorderPos, bottomBorderPos}};
-
-    return GuiPolyline(borderPoints, color, 1);
+    return GuiRect({leftBorderPos, topBorderPos}, {rightBorderPos, bottomBorderPos}, color, 1);
 }
 
 std::pair<std::vector<cpplot2d::Plot2D::GuiLine>, std::vector<cpplot2d::Plot2D::GuiText>>
 cpplot2d::Plot2D::GetPlotBorderTickLines(const WindowRect& rect, Color color)
 {
-    // TODO: Consolidate magic numbers
-
     const int leftBorderPos = rect.left + (int)m_plotBorderOffsets.first;
     const int rightBorderPos = rect.right - (int)m_plotBorderOffsets.first;
     const int topBorderPos = rect.top - (int)m_plotBorderOffsets.second;
@@ -1308,24 +1318,33 @@ cpplot2d::Plot2D::GetPlotBorderTickLines(const WindowRect& rect, Color color)
 std::vector<cpplot2d::Plot2D::GuiText> cpplot2d::Plot2D::GetPlotLabels(const WindowRect& rect,
                                                                        Color color)
 {
+    const Dimension2d charSize = m_charSize;
+    const std::string font = m_font;
     std::vector<GuiText> labels{3};
-    labels[0] = GuiText(
-        xLabel,
-        Point((int)(rect.right / 2) - (int)xLabel.size() * m_charSize.first, rect.bottom + 2 * m_charSize.second), 1,
-        color, Orientation::HORIZONTAL, 12);  // X-axis label
+    labels[0] = GuiText(xLabel,
+                        Point((int)(rect.right / 2) - (int)xLabel.size() * charSize.first,
+                              rect.bottom + 2 * charSize.second),
+                        1, color, Orientation::HORIZONTAL, 12, font);  // X-axis label
     labels[1] = GuiText(yLabel,
-                        Point(rect.left + m_charSize.first,
-                              (int)((rect.top - (int)yLabel.size() * m_charSize.first) / 2)),
-        1, color, Orientation::VERTICAL, 12);  // Y-axis label
+                        Point(rect.left + charSize.first,
+                              (int)((rect.top - (int)yLabel.size() * charSize.first) / 2)),
+                        1, color, Orientation::VERTICAL, 12, font);  // Y-axis label
     labels[2] = GuiText(title,
-                        Point((int)(rect.right / 2) - (int)title.size() * m_charSize.first,
-                              rect.top - (int)m_plotBorderOffsets.second + 2 * m_charSize.second),
-                        1, color, Orientation::HORIZONTAL, 14);  // Plot title
+                        Point((int)(rect.right / 2) - (int)title.size() * charSize.first,
+                              rect.top - (int)m_plotBorderOffsets.second + 2 * charSize.second),
+                        1, color, Orientation::HORIZONTAL, 14, font);  // Plot title
 
     return labels;
 }
-inline std::pair<float, float> cpplot2d::Plot2D::CalculateViewportToWindowScaleFactors(
+inline void cpplot2d::Plot2D::UpdateViewportWindowScaleFactors(
     const Dimension2d& windowSize)
+{
+    Pointf viewportToWindow = GetViewportToWindowScaleFactor(windowSize);
+    m_viewportToWindowScaleFactors = viewportToWindow;
+    m_windowToViewportScaleFactors = {1/viewportToWindow.first, 1/viewportToWindow.second};
+}
+
+inline cpplot2d::detail::Pointf cpplot2d::Plot2D::GetViewportToWindowScaleFactor(const Dimension2d& windowSize)
 {
     const float xPlotSpan = (float)windowSize.first - 2 * m_plotBorderOffsets.first;
     const float yPlotSpan = (float)windowSize.second - 2 * m_plotBorderOffsets.second;
@@ -1333,52 +1352,33 @@ inline std::pair<float, float> cpplot2d::Plot2D::CalculateViewportToWindowScaleF
     const float viewSpanX = (m_viewSpanX > 0.0f) ? m_viewSpanX : 1.0f;
     const float viewSpanY = (m_viewSpanY > 0.0f) ? m_viewSpanY : 1.0f;
 
-    float xScale = viewSpanX / xPlotSpan;
-    float yScale = viewSpanY / yPlotSpan;
-    return {xScale, yScale};
-}
-inline std::pair<float, float> cpplot2d::Plot2D::CalculateWindowToViewportScaleFactors(
-    const Dimension2d& windowSize)
-{
-    const float xPlotSpan = (float)windowSize.first - 2 * m_plotBorderOffsets.first;
-    const float yPlotSpan = (float)windowSize.second - 2 * m_plotBorderOffsets.second;
-
-    const float viewSpanX = (m_viewSpanX > 0.0f) ? m_viewSpanX : 1.0f;
-    const float viewSpanY = (m_viewSpanY > 0.0f) ? m_viewSpanY : 1.0f;
-
-    float xScale = xPlotSpan / viewSpanX;
-    float yScale = yPlotSpan / viewSpanY;
-    return {xScale, yScale};
+    return {viewSpanX / xPlotSpan, viewSpanY / yPlotSpan};
 }
 
-cpplot2d::Plot2D::GuiPolyline cpplot2d::Plot2D::GetDataPolyline(const LineSeries& series,
-                                                                const WindowRect& rect)
+void cpplot2d::Plot2D::GetDataPolyline(const LineSeries& series, const WindowRect& rect, GuiPolyline& output)
 {
-    if (series.size == 0) return {};
+    if (series.size == 0) return;
 
     // Store member variables for faster access
     const WindowRect vRect = m_viewportRect;
     const size_t seriesSize = series.data.size();
-    const float xMul = m_windowToViewportScaleFactors.first;
-    const float xAdd =
-        m_plotBorderOffsets.first - m_viewZero.first * m_windowToViewportScaleFactors.first;
-    const float yMul = m_windowToViewportScaleFactors.second;
+    const Pointf windowToViewportScales = m_windowToViewportScaleFactors;
+    const float xMul = windowToViewportScales.first;
+    const float xAdd = m_plotBorderOffsets.first - m_viewZero.first * windowToViewportScales.first;
+    const float yMul = windowToViewportScales.second;
     const float yAdd =
-        m_plotBorderOffsets.second - m_viewZero.second * m_windowToViewportScaleFactors.second;
+        m_plotBorderOffsets.second - m_viewZero.second * windowToViewportScales.second;
 
-    std::vector<Point> toDraw;
-    toDraw.reserve(seriesSize);
+    m_polylineBuffer.clear();
 
     // Initialization 
-    Point transformedPoint{static_cast<int>(transformedPoint.first = static_cast<int>(
-                                                series.data[0].first * xMul + xAdd)),
+    Point transformedPoint{static_cast<int>(series.data[0].first * xMul + xAdd),
                            static_cast<int>(series.data[0].second * yMul + yAdd)};
     Point lastPoint = transformedPoint;
     bool lastPointInsideViewport = IsPointInsideRect(
         lastPoint, vRect);  // Cache to prevent checking bounds on 2 points every iteration.
     bool currentPointInsideViewport = lastPointInsideViewport;
-    if (currentPointInsideViewport)
-        toDraw.emplace_back(transformedPoint);
+    if (currentPointInsideViewport) m_polylineBuffer.emplace_back(transformedPoint);
 
     // State encodings to prevent nested ifs
     int lastIn = lastPointInsideViewport;
@@ -1399,15 +1399,17 @@ cpplot2d::Plot2D::GuiPolyline cpplot2d::Plot2D::GetDataPolyline(const LineSeries
         {
             case 0b11:  // both inside
                 if (lastPoint != transformedPoint) 
-                    toDraw.emplace_back(transformedPoint);
+                    m_polylineBuffer.emplace_back(transformedPoint);
                 break;
 
             case 0b10:  // leaving    
-                toDraw.emplace_back(GetIntersectionPointOnRect(lastPoint, transformedPoint, vRect));
+                m_polylineBuffer.emplace_back(
+                    GetIntersectionPointOnRect(lastPoint, transformedPoint, vRect));
                 break;
             case 0b01:  // entering
-                toDraw.emplace_back(GetIntersectionPointOnRect(transformedPoint, lastPoint, vRect));
-                toDraw.emplace_back(transformedPoint);
+                m_polylineBuffer.emplace_back(
+                    GetIntersectionPointOnRect(transformedPoint, lastPoint, vRect));
+                m_polylineBuffer.emplace_back(transformedPoint);
 
                 break;
 
@@ -1427,13 +1429,13 @@ cpplot2d::Plot2D::GuiPolyline cpplot2d::Plot2D::GetDataPolyline(const LineSeries
                         if (DistanceSquared(lastPoint, p2) >
                             DistanceSquared(lastPoint, p1))
                         {
-                            toDraw.emplace_back(p1);
-                            toDraw.emplace_back(p2);
+                            m_polylineBuffer.emplace_back(p1);
+                            m_polylineBuffer.emplace_back(p2);
                         }
                         else
                         {
-                            toDraw.emplace_back(p2);
-                            toDraw.emplace_back(p1);
+                            m_polylineBuffer.emplace_back(p2);
+                            m_polylineBuffer.emplace_back(p1);
                         }
                         break;
 
@@ -1446,7 +1448,8 @@ cpplot2d::Plot2D::GuiPolyline cpplot2d::Plot2D::GetDataPolyline(const LineSeries
         lastIn = currentPointInsideViewport;
     }
 
-    return GuiPolyline(toDraw, series.color);
+    output.points = m_polylineBuffer;
+    output.color = series.color;
 }
 
 inline int cpplot2d::Plot2D::DistanceSquared(const Point& p1, const Point& p2)
@@ -1617,36 +1620,6 @@ bool cpplot2d::Plot2D::IntersectionPoint(const Point& a, const Point& b,
     // Colinear
     return false;
 }
-
-//cpplot2d::Plot2D::Point cpplot2d::Plot2D::IntersectionPoint(const Point& a, const Point& b,
-//                                                         const Point& c,
-//                                        const Point& d)
-//{
-//    double x1 = a.first, y1 = a.second;
-//    double x2 = b.first, y2 = b.second;
-//    double x3 = c.first, y3 = c.second;
-//    double x4 = d.first, y4 = d.second;
-//
-//    double denom = (x1 - x2) * (y3 - y4) - (y1 - y2) * (x3 - x4);
-//
-//    //if (denom == 0.0) return std::nullopt;  // Parallel or collinear
-//
-//    double px = ((x1 * y2 - y1 * x2) * (x3 - x4) - (x1 - x2) * (x3 * y4 - y3 * x4)) / denom;
-//
-//    double py = ((x1 * y2 - y1 * x2) * (y3 - y4) - (y1 - y2) * (x3 * y4 - y3 * x4)) / denom;
-//
-//    // Check if intersection lies on both segments
-//    auto onSeg = [](double x, double y, const Point& p, const Point& q)
-//    {
-//        return x >= std::min(p.first, q.first) - 1e-9 && x <= std::max(p.first, q.first) + 1e-9 &&
-//               y >= std::min(p.second, q.second) - 1e-9 && y <= std::max(p.second, q.second) + 1e-9;
-//    };
-//
-//    if (onSeg(px, py, a, b) && onSeg(px, py, c, d)) return Point{(int)px, (int)py};
-//
-//    CPPLOT2D_DEBUG("Failed to find intersection point");
-//    return a;
-//}
 void cpplot2d::Plot2D::Show(bool block)
 {
     m_window->SetIsVisible(true);
@@ -1670,44 +1643,23 @@ void cpplot2d::Plot2D::OnWindowResizeCallback(IWindow& window)
     Dimension2d size = window.GetRect().Size();
     float verticalOffset = (float)size.second * m_plotBorderOffsetFactor;
     float horizontalOffset = (float)size.first * m_plotBorderOffsetFactor;
-    SetPlotBorderOffsets(std::pair<float, float>{(float)size.first * m_plotBorderOffsetFactor,
-        (float)size.second * m_plotBorderOffsetFactor});
+    SetPlotBorderOffsets(std::pair<float, float>{horizontalOffset, verticalOffset});
     SetViewportRect(WindowRect(size.second - (int)verticalOffset, (int)horizontalOffset,
                                size.first - (int)horizontalOffset, (int)verticalOffset));
 
-    m_viewportToWindowScaleFactors = CalculateViewportToWindowScaleFactors(size);
-    m_windowToViewportScaleFactors = CalculateWindowToViewportScaleFactors(size);
-
-    // TODO: Use binning to reduce number of points drawn for large datasets
-    UpdatePlotWindowState(m_plotWindowState.get(), *m_window);
-    window.Invalidate(m_plotWindowState.get());
-}
-void cpplot2d::Plot2D::OnWindowResizeEndCallback(IWindow& window)
-{
-    Dimension2d size = window.GetRect().Size();
-
-    float verticalOffset = (float)size.second * m_plotBorderOffsetFactor;
-    float horizontalOffset = (float)size.first * m_plotBorderOffsetFactor;
-    SetPlotBorderOffsets(std::pair<float, float>{(float)size.first * m_plotBorderOffsetFactor,
-        (float)size.second * m_plotBorderOffsetFactor});
-    SetViewportRect(WindowRect(size.second - (int)verticalOffset, (int)horizontalOffset,
-                               size.first - (int)horizontalOffset, (int)verticalOffset));
-
-    m_viewportToWindowScaleFactors = CalculateViewportToWindowScaleFactors(size);
-    m_windowToViewportScaleFactors = CalculateWindowToViewportScaleFactors(size);
-
+    UpdateViewportWindowScaleFactors(size);
     UpdatePlotWindowState(m_plotWindowState.get(), *m_window);
     window.Invalidate(m_plotWindowState.get());
 }
 
-std::pair<float, float> cpplot2d::Plot2D::GetTransformedCoordinates(Point coord)
+cpplot2d::detail::Pointf cpplot2d::Plot2D::GetTransformedCoordinates(Point coord)
 {
-    auto coordinates = std::pair<float, float>(
-        ((float)coord.first - m_plotBorderOffsets.first) * m_viewportToWindowScaleFactors.first + m_viewZero.first,
-        (((float)coord.second - m_plotBorderOffsets.second) * m_viewportToWindowScaleFactors.second +
-         m_viewZero.second));
+    const Pointf offsets = m_plotBorderOffsets;
+    const Pointf viewportOrigin = m_viewZero;
+    const Pointf scaleFactors = m_viewportToWindowScaleFactors;
 
-    return coordinates;
+    return {((float)coord.first - offsets.first) * scaleFactors.first + viewportOrigin.first,
+            (((float)coord.second - offsets.second) * scaleFactors.second + viewportOrigin.second)};
 }
 
 void cpplot2d::Plot2D::OnMouseMoveCallback(IWindow& w, Point mousePos)
@@ -1730,16 +1682,18 @@ void cpplot2d::Plot2D::OnMouseMoveCallback(IWindow& w, Point mousePos)
 }
 void cpplot2d::Plot2D::HandlePanDrag(IWindow& w, Point mousePos)
 {
+    const Pointf scales = m_viewportToWindowScaleFactors;
+    const Point lastMousePos = m_lastMousePos;
+
     // Calculate mouse movement delta in data coords
-    float deltaX = static_cast<float>(m_lastMousePos.first - mousePos.first) * m_viewportToWindowScaleFactors.first;
-    float deltaY =
-        static_cast<float>(m_lastMousePos.second - mousePos.second) * m_viewportToWindowScaleFactors.second;
-    // Update view offsets
-    m_viewZero.first += deltaX;
-    m_viewZero.second += deltaY;
+    // And update view offsets
+    m_viewZero.first += static_cast<float>(lastMousePos.first - mousePos.first) * scales.first;
+    m_viewZero.second += static_cast<float>(lastMousePos.second - mousePos.second) * scales.second;
+
     // Update and redraw
     UpdatePlotWindowState(m_plotWindowState.get(), *m_window);
     w.Invalidate(m_plotWindowState.get());
+
     m_lastMousePos = mousePos;
 }
 void cpplot2d::Plot2D::HandleZoomDrag(IWindow& w, Point mousePos)
@@ -1754,7 +1708,7 @@ void cpplot2d::Plot2D::HandleZoomDrag(IWindow& w, Point mousePos)
     int y2 = std::clamp(std::max(m_lastMousePos.second, mousePos.second), m_viewportRect.bottom,
                         m_viewportRect.top);
     // Draw rectangle overlay
-    m_plotWindowState->rects = {(GuiRect({x1, y2}, {x2, y1}, Color::Yellow()))};
+    m_plotWindowState->rects.back() = {(GuiRect({x1, y2}, {x2, y1}, Color::Yellow()))};
     w.Invalidate(m_plotWindowState.get());
 }
 inline const bool cpplot2d::Plot2D::IsPointInsideRect(const Point& p, const WindowRect& rect )
@@ -1855,8 +1809,11 @@ void cpplot2d::Plot2D::Zoom(WindowRect zoomRect, IWindow& w)
 {
     // Set plot view to match rectangle
     Dimension2d windowSize = w.GetRect().Size();
-    std::pair<float, float> scales =
-        CalculateViewportToWindowScaleFactors(windowSize);
+    const Pointf windowToViewportScales = m_windowToViewportScaleFactors;
+    const Pointf viewportToWindowScales = m_viewportToWindowScaleFactors;
+    UpdateViewportWindowScaleFactors(windowSize);
+    const Pointf scales = m_viewportToWindowScaleFactors;
+
     m_viewZero.first =
         ((float)zoomRect.left - m_plotBorderOffsets.first) * scales.first + m_viewZero.first;
     m_viewZero.second =
@@ -1878,7 +1835,8 @@ void cpplot2d::Plot2D::OnToggleZoomClicked(IWindow& w)
     if (m_InteractionMode == InteractionMode::ZOOM_DEFAULT)
     {
         m_InteractionMode = InteractionMode::NONE;
-        m_plotWindowState->text.back() = {};  // Remove interaction mode text
+        // Remove interaction mode text
+        m_plotWindowState->text.back() = {};  
     }
     else
     {
@@ -1921,7 +1879,7 @@ void cpplot2d::Plot2D::OnResetViewClicked(IWindow& w)
     m_viewZero = m_defaultViewZero;
     m_viewSpanX = m_defaultViewSpanX;
     m_viewSpanY = m_defaultViewSpanY;
-
+    UpdateViewportWindowScaleFactors(w.GetRect().Size());
     UpdatePlotWindowState(m_plotWindowState.get(), *m_window);
     w.Invalidate(m_plotWindowState.get());
 
@@ -2011,8 +1969,6 @@ cpplot2d::Plot2D::Win32Window::Win32Window(Dimension2d defaultWindowSize, Dimens
 
     HDC hdc = GetDC(m_hwnd);
     SetGraphicsMode(hdc, GM_ADVANCED);
-    m_font12 = CreateFontOfSize(hdc, 12);
-    m_font14 = CreateFontOfSize(hdc, 14);
     ReleaseDC(m_hwnd, hdc);
 
 }
@@ -2335,6 +2291,10 @@ inline LRESULT cpplot2d::Plot2D::Win32Window::HandleMessage(HWND hwnd, UINT uMsg
                 return DefWindowProc(hwnd, uMsg, wParam, lParam);
             }
         }
+        case WM_SHOWWINDOW:
+            ResizeBackBuffer(hwnd);
+            if (OnResizeCallback) OnResizeCallback();
+            break;
         case WM_DESTROY:
             PostQuitMessage(0);
             return 0;
@@ -2353,11 +2313,11 @@ void cpplot2d::Plot2D::Win32Window::DoDrawText(HDC hdc, GuiText text, RECT clien
     HFONT font = nullptr;
     if (text.orientation == Orientation::VERTICAL)
     {
-        font = CreateVerticalFont(hdc, text.size);
+        font = CreateVerticalFont(hdc, text.size, text.font);
     }
     else
     {
-        font = CreateFontOfSize(hdc, text.size);
+        font = CreateFontOfSize(hdc, text.size, text.font);
     }
     oldFont = (HFONT)SelectObject(hdc, font);
 
@@ -2369,7 +2329,7 @@ void cpplot2d::Plot2D::Win32Window::DoDrawText(HDC hdc, GuiText text, RECT clien
     DeleteObject(font);
 
 }
-HFONT cpplot2d::Plot2D::Win32Window::CreateVerticalFont(HDC hdc, int pointSize)
+HFONT cpplot2d::Plot2D::Win32Window::CreateVerticalFont(HDC hdc, int pointSize, const std::string& font)
 {
     int dpi = GetDeviceCaps(hdc, LOGPIXELSY);
     int height = -MulDiv(pointSize, dpi, 72);
@@ -2379,21 +2339,19 @@ HFONT cpplot2d::Plot2D::Win32Window::CreateVerticalFont(HDC hdc, int pointSize)
     lf.lfEscapement = 900;   // 90 degrees
     lf.lfOrientation = 900;  // 90 degrees
     lf.lfCharSet = ANSI_CHARSET;
-    strcpy_s(lf.lfFaceName, "Tahoma");
+    strcpy_s(lf.lfFaceName, font.c_str());
 
     return CreateFontIndirectA(&lf);
 }
 
-HFONT cpplot2d::Plot2D::Win32Window::CreateFontOfSize(HDC hdc, int pointSize)
+HFONT cpplot2d::Plot2D::Win32Window::CreateFontOfSize(HDC hdc, int pointSize, const std::string& font)
 {
     int dpi = GetDeviceCaps(hdc, LOGPIXELSY);
     int height = -MulDiv(pointSize, dpi, 72);  // negative = character height
 
     return CreateFontA(height, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE, ANSI_CHARSET,
                        OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, DEFAULT_QUALITY,
-                       DEFAULT_PITCH | FF_DONTCARE,
-                       "Tahoma"
-    );
+                       DEFAULT_PITCH | FF_DONTCARE, font.c_str());
 }
 
 void cpplot2d::Plot2D::Win32Window::ResizeBackBuffer(HWND hwnd)
@@ -2477,9 +2435,9 @@ void cpplot2d::Plot2D::Win32Window::DrawWindowState()
     {
         // Draw rectangle frame
         HBRUSH brush = CreateSolidBrush(ToWin32Color(guiRect.borderColor));
-
+        // Add 1 to right side of rect since Win32 stops the rect 1 pixel prior
         const RECT winRect = {guiRect.topLeft.first, rect.bottom - guiRect.topLeft.second,
-                              guiRect.bottomRight.first, rect.bottom - guiRect.bottomRight.second};
+                              guiRect.bottomRight.first + 1, rect.bottom - guiRect.bottomRight.second};
         FrameRect(m_backBuffer.backDC, &winRect, brush);
         DeleteObject(brush);
     }
