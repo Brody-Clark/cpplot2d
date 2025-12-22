@@ -14,6 +14,8 @@
 > **Project Status: In Progress**
 >
 > _This project is actively being developed. Some features are incomplete or experimental._
+> 
+> Planned features (In progress): Linux (X11) support, deafult color themes
 
 ## About
 
