@@ -166,6 +166,13 @@ enum class Orientation : uint8_t
     VERTICAL = 1
 };
 
+// Text alignment
+enum class Alignment : uint8_t
+{
+    LEFT = 0,
+    RIGHT = 1
+};
+
 // Represents a polyline to be drawn in the window. More efficient than multiple lines.
 struct GuiPolyline
 {
@@ -197,24 +204,26 @@ struct GuiText
 {
    public:
     GuiText(const std::string& text, const Point pos, int spacing, const Color& color,
-            Orientation orientation, int size = 10, std::string font = "Tahoma")
+            Orientation orientation, int size = 10, std::string font = "Tahoma", Alignment alignment = Alignment::LEFT)
         : text(text),
           pos(pos),
           spacing(spacing),
           color(color),
           orientation(orientation),
           size(size),
-          font(font)
+          font(font),
+          alignment(alignment)
     {
     }
     GuiText() = default;
     std::string text = "";
     Point pos = {-1, -1};
-    int spacing = 1;
+    int spacing = 1; // TODO remove
     int size = 10;
     std::string font = "Tahoma";
     Color color = Color::White();
     Orientation orientation = Orientation::HORIZONTAL;
+    Alignment alignment = Alignment::LEFT;
 };
 
 // Represents a rectangle to be drawn in the window
@@ -292,6 +301,7 @@ typedef cpplot2d::detail::GuiLine GuiLine;
 typedef cpplot2d::detail::GuiPolyline GuiPolyline;
 typedef cpplot2d::detail::GuiCircle GuiCircle;
 typedef cpplot2d::detail::GuiText GuiText;
+typedef cpplot2d::detail::GuiRect GuiRect;
 typedef cpplot2d::detail::WindowState WindowState;
 
 @interface WindowView : NSView
@@ -379,10 +389,23 @@ NSColor* NSColorFromCppColor(const cpplot2d::Color& cppColor)
     [color setFill];
     [circlePath fill];
 }
-- (void)drawVerticalText:(NSString*)text atPoint:(NSPoint)point color:(NSColor*)color size:(int)size
+- (void)drawRectWithTopLeft:(NSPoint)topLeft bottomRight:(NSPoint)bottomRight color:(NSColor*)color
 {
-    NSDictionary* attributes = @{
-        NSFontAttributeName : [NSFont systemFontOfSize:size],
+    NSRect rect = NSMakeRect(topLeft.x,
+                             bottomRight.y,
+                             bottomRight.x - topLeft.x,
+                             topLeft.y - bottomRight.y);
+
+    NSBezierPath *path = [NSBezierPath bezierPathWithRect:rect];
+
+    [color setStroke];
+    [path stroke];
+}
+- (void)drawVerticalText:(NSString*)text atPoint:(NSPoint)point color:(NSColor*)color fontName:(NSString*)fontName size:(int)size
+{
+    NSFont *customFont = [NSFont fontWithName:fontName size:size];
+     NSDictionary* attributes = @{
+        NSFontAttributeName : customFont,
         NSForegroundColorAttributeName : color
     };
 
@@ -402,12 +425,34 @@ NSColor* NSColorFromCppColor(const cpplot2d::Color& cppColor)
     // Restore the graphics context
     [context restoreGraphicsState];
 }
-- (void)drawText:(NSString*)text atPoint:(NSPoint)point color:(NSColor*)color size:(int)size
+- (void)drawRightAlignedText:(NSString*)text atPoint:(NSPoint)point color:(NSColor*)color fontName:(NSString*)fontName size:(int)size
 {
+    NSFont *customFont = [NSFont fontWithName:fontName size:size];
+    NSMutableParagraphStyle *style = [[NSMutableParagraphStyle alloc] init];
+    [style setAlignment:NSTextAlignmentRight];
+
     NSDictionary* attributes = @{
-        NSFontAttributeName : [NSFont systemFontOfSize:size],
+        NSFontAttributeName : customFont,
+        NSForegroundColorAttributeName : color,
+        NSParagraphStyleAttributeName : style
+    };
+
+    // Adjust the X coordinate
+    // subtract the width from the anchor point so the 'end' of the text is at anchorPoint.x
+    NSSize textSize = [text sizeWithAttributes:attributes];
+    NSPoint adjustedPoint = NSMakePoint(point.x - textSize.width, point.y);
+
+    [text drawAtPoint:adjustedPoint withAttributes:attributes];
+}
+- (void)drawText:(NSString*)text atPoint:(NSPoint)point color:(NSColor*)color fontName:(NSString*)fontName size:(int)size
+{
+    NSFont *customFont = [NSFont fontWithName:fontName size:size];
+
+    NSDictionary* attributes = @{
+        NSFontAttributeName : customFont,
         NSForegroundColorAttributeName : color
     };
+    
     [text drawAtPoint:point withAttributes:attributes];
 }
 - (void)drawPolyline:(NSArray<NSValue*>*)points color:(NSColor*)color
@@ -441,55 +486,6 @@ NSColor* NSColorFromCppColor(const cpplot2d::Color& cppColor)
 
     // Stroke the path (draw the line)
     [path stroke];
-}
-
-- (void)drawWindowState:(WindowState*)state
-{
-    // Draw lines
-    for (const GuiLine& line : state->lines)
-    {
-        [self drawLineFrom:NSMakePoint(line.p1.first, line.p1.second)
-                        to:NSMakePoint(line.p2.first, line.p2.second)
-                     color:NSColorFromCppColor(line.color)];
-    }
-
-    // Draw polylines
-    for (const GuiPolyline& polyline : state->polylines)
-    {
-        NSMutableArray<NSValue*>* points = [NSMutableArray array];
-        for (const cpplot2d::detail::Point& p : polyline.points)
-        {
-            [points addObject:[NSValue valueWithPoint:NSMakePoint(p.first, p.second)]];
-        }
-        [self drawPolyline:points color:NSColorFromCppColor(polyline.color)];
-    }
-
-    // Draw circles
-    for (const GuiCircle& circle : state->circles)
-    {
-        [self drawCircleAt:NSMakePoint(circle.center.first, circle.center.second)
-                    radius:circle.radius
-                     color:[NSColor blackColor]];
-    }
-
-    // Draw text
-    for (const GuiText& text : state->text)
-    {
-        if (text.orientation == cpplot2d::detail::Orientation::HORIZONTAL)
-        {
-            [self drawText:[NSString stringWithUTF8String:text.text.c_str()]
-                   atPoint:NSMakePoint(text.pos.first, text.pos.second)
-                     color:[NSColor whiteColor]
-                      size:text.size];
-        }
-        else if (text.orientation == cpplot2d::detail::Orientation::VERTICAL)
-        {
-            [self drawVerticalText:[NSString stringWithUTF8String:text.text.c_str()]
-                           atPoint:NSMakePoint(text.pos.first, text.pos.second)
-                             color:[NSColor whiteColor]
-                              size:text.size];
-        }
-    }
 }
 
 - (void)drawRect:(NSRect)dirtyRect
@@ -527,25 +523,47 @@ NSColor* NSColorFromCppColor(const cpplot2d::Color& cppColor)
         {
             [self drawCircleAt:NSMakePoint(circle.center.first, circle.center.second)
                         radius:circle.radius
-                         color:NSColorFromCppColor(circle.fillColor)];
+                        color:NSColorFromCppColor(circle.fillColor)];
         }
+
+        // Draw rects
+        for (const GuiRect& rect : self.windowState->rects)
+        {
+            [self drawRectWithTopLeft:NSMakePoint(rect.topLeft.first, rect.topLeft.second)
+                        bottomRight:NSMakePoint(rect.bottomRight.first, rect.bottomRight.second)
+                        color:NSColorFromCppColor(rect.borderColor)];
+        }
+
 
         // Draw text
         for (const GuiText& text : self.windowState->text)
         {
             if (text.orientation == cpplot2d::detail::Orientation::HORIZONTAL)
             {
+                if (text.alignment == cpplot2d::detail::Alignment::LEFT)
+                {
                 [self drawText:[NSString stringWithUTF8String:text.text.c_str()]
                        atPoint:NSMakePoint(text.pos.first, text.pos.second)
-                         color:NSColorFromCppColor(text.color)
-                          size:text.size];
+                        color:NSColorFromCppColor(text.color)
+                        fontName:[NSString stringWithUTF8String:text.font.c_str()]
+                        size:text.size];
+                }
+                else
+                {
+                    [self drawRightAlignedText:[NSString stringWithUTF8String:text.text.c_str()]
+                       atPoint:NSMakePoint(text.pos.first, text.pos.second)
+                        color:NSColorFromCppColor(text.color)
+                        fontName:[NSString stringWithUTF8String:text.font.c_str()]
+                        size:text.size];
+                }
             }
             else if (text.orientation == cpplot2d::detail::Orientation::VERTICAL)
             {
                 [self drawVerticalText:[NSString stringWithUTF8String:text.text.c_str()]
                                atPoint:NSMakePoint(text.pos.first, text.pos.second)
-                                 color:NSColorFromCppColor(text.color)
-                                  size:text.size];
+                                color:NSColorFromCppColor(text.color)
+                                fontName:[NSString stringWithUTF8String:text.font.c_str()]
+                                size:text.size];
             }
         }
     }
@@ -686,6 +704,7 @@ class Plot2D
     using GuiRect = detail::GuiRect;
     using WindowState = detail::WindowState;
     using Orientation = detail::Orientation;
+    using Alignment = detail::Alignment;
     using MenuButtons = std::map<std::string, std::function<void()>>;
 
     // Plot interaction modes
@@ -1303,10 +1322,9 @@ cpplot2d::Plot2D::GetPlotBorderTickLines(const WindowRect& rect, Color color)
         labels.push_back(GuiText(
             label.str(),
             Point(
-                {std::max(10, int(leftBorderPos - (int)(charSize.first * 1.5) * label.str().size() -
-                                  m_tickLength)),
-                 y - charSize.second}),
-            1, color, Orientation::HORIZONTAL));
+                {std::max(10, leftBorderPos - charSize.first - m_tickLength),
+                 y - (int)(0.5* charSize.second)}),
+            1, color, Orientation::HORIZONTAL, 10, m_font, Alignment::RIGHT));
     }
     ticks.push_back(GuiLine({leftBorderPos - m_tickLength, topBorderPos},
                             {leftBorderPos + m_tickLength, topBorderPos}, color));
@@ -1314,10 +1332,9 @@ cpplot2d::Plot2D::GetPlotBorderTickLines(const WindowRect& rect, Color color)
     label << std::setprecision(3) << offset;
     labels.push_back(GuiText(
         label.str(),
-        Point({std::max(10, int(leftBorderPos - (int)(charSize.first * 1.5) * label.str().size() -
-                                m_tickLength)),
-               topBorderPos - charSize.second}),
-        1, color, Orientation::HORIZONTAL));
+        Point({std::max(10, int(leftBorderPos - charSize.first - m_tickLength)),
+               topBorderPos - (int)(0.5 * charSize.second)}),
+        1, color, Orientation::HORIZONTAL, 10, m_font, Alignment::RIGHT));
 
     return {ticks, labels};
 }
@@ -1333,7 +1350,7 @@ std::vector<cpplot2d::Plot2D::GuiText> cpplot2d::Plot2D::GetPlotLabels(const Win
                               rect.bottom + charSize.second),
                         1, color, Orientation::HORIZONTAL, 12, font);  // X-axis label
     labels[1] = GuiText(yLabel,
-                        Point(rect.left + charSize.first,
+                        Point(rect.left + charSize.second,
                               (int)((rect.top - (int)yLabel.size() * charSize.first) / 2)),
                         1, color, Orientation::VERTICAL, 12, font);  // Y-axis label
     labels[2] = GuiText(title,
@@ -2737,13 +2754,13 @@ inline Plot2D::CocoaWindow::~CocoaWindow()
     [[NSNotificationCenter defaultCenter] removeObserver:mouseMoveObserver];
 }
 
-Dimension2d Plot2D::CocoaWindow::GetAverageCharSize()
+cpplot2d::Plot2D::Dimension2d Plot2D::CocoaWindow::GetAverageCharSize()
 {
     NSFont* font = [NSFont systemFontOfSize:[NSFont systemFontSize]];
     NSDictionary* attributes = @{NSFontAttributeName : font};
     NSString* sampleText = @"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
     NSSize textSize = [sampleText sizeWithAttributes:attributes];
-    return {textSize.width / sampleText.length, textSize.height / sampleText.length};
+    return {textSize.width / sampleText.length, textSize.height};
 }
 
 void Plot2D::CocoaWindow::AddMenuButtons(const std::string menu, MenuButtons menuButtons)
@@ -2756,7 +2773,7 @@ void Plot2D::CocoaWindow::AddMenuButtons(const std::string menu, MenuButtons men
         [[NSMenuItem alloc] initWithTitle:menuTitle action:nil keyEquivalent:@""];
     [mainMenu addItem:menuItem];
 
-    NSMenu* submenu = [[NSMenu alloc] initWithTitle:menuTitle];
+   NSMenu* submenu = [[NSMenu alloc] initWithTitle:menuTitle];
     [menuItem setSubmenu:submenu];
 
     // Add buttons to the menu
