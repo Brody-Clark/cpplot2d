@@ -1,4 +1,5 @@
 #include <benchmark/benchmark.h>
+#define CPPLOT2D_IMPLEMENTATION
 #include "cpplot2d.h"
 
 
