@@ -59,7 +59,7 @@ int main()
     y2[0] = static_cast<float>(2);
     y2[1] = static_cast<float>(2);*/
     
-    cpplot2d::Plot2D plot("", "", "");
+    cpplot2d::Plot2D plot("Plot", "Test X", "Test Y");
     plot.AddLine(x, y, cpplot2d::Color::FromRGB(0, 255, 0))
         .AddLine(x2, y2, cpplot2d::Color::FromRGB(255, 0, 0));
     plot.Show();

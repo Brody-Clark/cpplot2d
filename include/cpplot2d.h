@@ -25,7 +25,6 @@
 #ifdef _WIN32
 #include <windows.h>
 #endif
-#define CPPLOT2D_IMPLEMENTATION
 // Enable by defining CPPLOT2D_ENABLE_DEBUG (in CMake or project preprocessor defs)
 #ifdef CPPLOT2D_ENABLE_DEBUG
 
@@ -1756,7 +1755,7 @@ void cpplot2d::Plot2D::HandleMouseHover(IWindow& w, Point mousePos)
 
         // Start mouse coordinate text at top left corner with small offset
         int x = rect.left + 1 * m_charSize.first;
-        int y = rect.top - m_charSize.second;
+        int y = rect.top - 1 - m_charSize.second;
 
         m_coordinateViewState->text = {
             GuiText(coordText, Point(x, y), 1, Color::White(), Orientation::HORIZONTAL)};
@@ -2364,16 +2363,25 @@ void cpplot2d::Plot2D::Win32Window::DoDrawText(HDC hdc, GuiText text, RECT clien
     HFONT oldFont = nullptr;
     HFONT font = nullptr;
     int height = GetTextHeight(hdc, text.size);
-    if (text.orientation == Orientation::VERTICAL)
-    {
-        font = CreateVerticalFont(height, text.font);
-    }
-    else
+    if (text.orientation != Orientation::VERTICAL)
     {
         font = CreateFontOfSize(height, text.font);
     }
-    oldFont = (HFONT)SelectObject(hdc, font);
+    else
+    {
+        font = CreateVerticalFont(height, text.font);
+        
+    }
 
+    if (text.alignment != Alignment::RIGHT)
+    {
+        SetTextAlign(hdc, TA_LEFT | TA_TOP);
+    }
+    else
+    {
+        SetTextAlign(hdc, TA_RIGHT | TA_TOP);
+    }
+    oldFont = (HFONT)SelectObject(hdc, font);
     SetTextColor(hdc, ToWin32Color(text.color));
     SetBkMode(hdc, TRANSPARENT);
     TextOutA(hdc, text.pos.first, clientRect.bottom - text.pos.second + height, text.text.c_str(),
