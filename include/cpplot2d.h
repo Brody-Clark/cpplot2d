@@ -646,8 +646,8 @@ struct PlotProperties
 class Plot2D
 {
    public:
-    Plot2D(std::string title = "", std::string xLabel = "",
-           std::string yLabel = "", PlotProperties props = {});
+    Plot2D(std::string title = "", std::string xLabel = "", std::string yLabel = "",
+           PlotProperties props = {});
 
     /**
      Adds a line series to the plot.
@@ -978,7 +978,7 @@ class Plot2D
         HMENU m_hMenu = nullptr;
         RECT m_invalidatedRegion;
         std::map<int, std::function<void()>> m_menuCommands;
-        bool m_drawnOnce = false; 
+        bool m_drawnOnce = false;
 
         void DrawWindowState(const RECT& clientRect, const RECT& invalidatedRect);
         LRESULT HandleMessage(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
@@ -1064,14 +1064,15 @@ class Plot2D
 
 std::unique_ptr<cpplot2d::Plot2D::IGraphicsContext> cpplot2d::Plot2D::m_graphicsContext = nullptr;
 
-cpplot2d::Plot2D::Plot2D(std::string title, std::string xLabel,
-                         std::string yLabel, PlotProperties props)
+cpplot2d::Plot2D::Plot2D(std::string title, std::string xLabel, std::string yLabel,
+                         PlotProperties props)
     : xLabel(xLabel), yLabel(yLabel), title(title), m_plotProperties(props)
 {
     Initialize();
 }
 
-void cpplot2d::Plot2D::Initialize(){
+void cpplot2d::Plot2D::Initialize()
+{
 #ifdef _WIN32
     m_graphicsContext = std::make_unique<Win32GraphicsContext>();
 #elif defined(__APPLE__)
@@ -1279,8 +1280,8 @@ cpplot2d::Plot2D::GetPlotBorderTickLines(const WindowRect& rect, Color color)
     label << std::setprecision(3) << offset + increment;
     labels.push_back(GuiText(
         label.str(),
-        {rightBorderPos - charSize.first * 3, bottomBorderPos - m_tickLength - charSize.second},
-        1, color, Orientation::HORIZONTAL));
+        {rightBorderPos - charSize.first * 3, bottomBorderPos - m_tickLength - charSize.second}, 1,
+        color, Orientation::HORIZONTAL));
 
     // Draw Y-axis ticks
     int numTicksY = m_plotProperties.tickLineCount;
@@ -2246,9 +2247,8 @@ inline LRESULT cpplot2d::Plot2D::Win32Window::HandleMessage(HWND hwnd, UINT uMsg
             m_inMove = m_inSize = false;
             m_useCachedBitmap = false;  // ONLY for dragging
             if (OnResizeEndCallback) OnResizeEndCallback();
-            //InvalidateRect(hwnd, nullptr, TRUE);
+            // InvalidateRect(hwnd, nullptr, TRUE);
             return 0;
-            
         }
         case WM_SIZE:
         {
@@ -2319,7 +2319,7 @@ inline LRESULT cpplot2d::Plot2D::Win32Window::HandleMessage(HWND hwnd, UINT uMsg
         {
             // Mouse move will trigger if window shows initially with the cursor over it.
             // Only allow mouse move events after the plot has been drawn at least once fully.
-            if (!m_drawnOnce) return 0; 
+            if (!m_drawnOnce) return 0;
 
             // Get the mouse position
             int x = LOWORD(lParam);
@@ -2366,7 +2366,6 @@ void cpplot2d::Plot2D::Win32Window::DoDrawText(HDC hdc, GuiText text, RECT clien
 }
 HFONT cpplot2d::Plot2D::Win32Window::CreateVerticalFont(int height, const std::string& font)
 {
-    
     LOGFONTA lf = {};
     lf.lfHeight = height;
     lf.lfEscapement = 900;   // 90 degrees
@@ -2381,10 +2380,8 @@ int cpplot2d::Plot2D::Win32Window::GetTextHeight(HDC hdc, int pointSize)
     int dpi = GetDeviceCaps(hdc, LOGPIXELSY);
     return -MulDiv(pointSize, dpi, 72);
 }
-HFONT cpplot2d::Plot2D::Win32Window::CreateFontOfSize(int height,
-                                                      const std::string& font)
+HFONT cpplot2d::Plot2D::Win32Window::CreateFontOfSize(int height, const std::string& font)
 {
-
     return CreateFontA(height, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE, ANSI_CHARSET,
                        OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, DEFAULT_QUALITY,
                        DEFAULT_PITCH | FF_DONTCARE, font.c_str());
@@ -2430,7 +2427,8 @@ void cpplot2d::Plot2D::Win32Window::DrawBitmap()
     EndPaint(m_hwnd, &ps);
 }
 
-void cpplot2d::Plot2D::Win32Window::DrawWindowState(const RECT& clientRect, const RECT& invalidatedRect)
+void cpplot2d::Plot2D::Win32Window::DrawWindowState(const RECT& clientRect,
+                                                    const RECT& invalidatedRect)
 {
     m_drawnOnce = true;
     PAINTSTRUCT ps;
@@ -2552,7 +2550,7 @@ void cpplot2d::Plot2D::Win32Window::InvalidateRegion(const cpplot2d::Plot2D::Win
     // Universal coords assume origin at bottom left and extend up.
     // Win32 is the opposite, so reverse the Y coords.
     m_invalidatedRegion = {windowRect.left, win32Rect.bottom - windowRect.top, windowRect.right,
-                       win32Rect.bottom - windowRect.bottom};
+                           win32Rect.bottom - windowRect.bottom};
     InvalidateRect(m_hwnd, &m_invalidatedRegion, FALSE);
 }
 
