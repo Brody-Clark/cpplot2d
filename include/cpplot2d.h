@@ -158,6 +158,9 @@ using Pointf = std::pair<float, float>;
 // 2D dimension (x, y)
 using Dimension2d = std::pair<int, int>;
 
+// 2D floating point dimension (x, y)
+using Dimension2df = std::pair<float, float>;
+
 // Text orientation
 enum class Orientation : uint8_t
 {
@@ -203,7 +206,8 @@ struct GuiText
 {
    public:
     GuiText(const std::string& text, const Point pos, int spacing, const Color& color,
-            Orientation orientation, int size = 10, std::string font = "Tahoma", Alignment alignment = Alignment::LEFT)
+            Orientation orientation, int size = 10, std::string font = "Tahoma",
+            Alignment alignment = Alignment::LEFT)
         : text(text),
           pos(pos),
           spacing(spacing),
@@ -217,7 +221,7 @@ struct GuiText
     GuiText() = default;
     std::string text = "";
     Point pos = {-1, -1};
-    int spacing = 1; // TODO remove
+    int spacing = 1;  // TODO remove
     int size = 10;
     std::string font = "Tahoma";
     Color color = Color::White();
@@ -390,23 +394,23 @@ NSColor* NSColorFromCppColor(const cpplot2d::Color& cppColor)
 }
 - (void)drawRectWithTopLeft:(NSPoint)topLeft bottomRight:(NSPoint)bottomRight color:(NSColor*)color
 {
-    NSRect rect = NSMakeRect(topLeft.x,
-                             bottomRight.y,
-                             bottomRight.x - topLeft.x,
-                             topLeft.y - bottomRight.y);
+    NSRect rect =
+        NSMakeRect(topLeft.x, bottomRight.y, bottomRight.x - topLeft.x, topLeft.y - bottomRight.y);
 
-    NSBezierPath *path = [NSBezierPath bezierPathWithRect:rect];
+    NSBezierPath* path = [NSBezierPath bezierPathWithRect:rect];
 
     [color setStroke];
     [path stroke];
 }
-- (void)drawVerticalText:(NSString*)text atPoint:(NSPoint)point color:(NSColor*)color fontName:(NSString*)fontName size:(int)size
+- (void)drawVerticalText:(NSString*)text
+                 atPoint:(NSPoint)point
+                   color:(NSColor*)color
+                fontName:(NSString*)fontName
+                    size:(int)size
 {
-    NSFont *customFont = [NSFont fontWithName:fontName size:size];
-     NSDictionary* attributes = @{
-        NSFontAttributeName : customFont,
-        NSForegroundColorAttributeName : color
-    };
+    NSFont* customFont = [NSFont fontWithName:fontName size:size];
+    NSDictionary* attributes =
+        @{NSFontAttributeName : customFont, NSForegroundColorAttributeName : color};
 
     // Save the current graphics context
     NSGraphicsContext* context = [NSGraphicsContext currentContext];
@@ -424,10 +428,14 @@ NSColor* NSColorFromCppColor(const cpplot2d::Color& cppColor)
     // Restore the graphics context
     [context restoreGraphicsState];
 }
-- (void)drawRightAlignedText:(NSString*)text atPoint:(NSPoint)point color:(NSColor*)color fontName:(NSString*)fontName size:(int)size
+- (void)drawRightAlignedText:(NSString*)text
+                     atPoint:(NSPoint)point
+                       color:(NSColor*)color
+                    fontName:(NSString*)fontName
+                        size:(int)size
 {
-    NSFont *customFont = [NSFont fontWithName:fontName size:size];
-    NSMutableParagraphStyle *style = [[NSMutableParagraphStyle alloc] init];
+    NSFont* customFont = [NSFont fontWithName:fontName size:size];
+    NSMutableParagraphStyle* style = [[NSMutableParagraphStyle alloc] init];
     [style setAlignment:NSTextAlignmentRight];
 
     NSDictionary* attributes = @{
@@ -443,15 +451,17 @@ NSColor* NSColorFromCppColor(const cpplot2d::Color& cppColor)
 
     [text drawAtPoint:adjustedPoint withAttributes:attributes];
 }
-- (void)drawText:(NSString*)text atPoint:(NSPoint)point color:(NSColor*)color fontName:(NSString*)fontName size:(int)size
+- (void)drawText:(NSString*)text
+         atPoint:(NSPoint)point
+           color:(NSColor*)color
+        fontName:(NSString*)fontName
+            size:(int)size
 {
-    NSFont *customFont = [NSFont fontWithName:fontName size:size];
+    NSFont* customFont = [NSFont fontWithName:fontName size:size];
 
-    NSDictionary* attributes = @{
-        NSFontAttributeName : customFont,
-        NSForegroundColorAttributeName : color
-    };
-    
+    NSDictionary* attributes =
+        @{NSFontAttributeName : customFont, NSForegroundColorAttributeName : color};
+
     [text drawAtPoint:point withAttributes:attributes];
 }
 - (void)drawPolyline:(NSArray<NSValue*>*)points color:(NSColor*)color
@@ -522,17 +532,16 @@ NSColor* NSColorFromCppColor(const cpplot2d::Color& cppColor)
         {
             [self drawCircleAt:NSMakePoint(circle.center.first, circle.center.second)
                         radius:circle.radius
-                        color:NSColorFromCppColor(circle.fillColor)];
+                         color:NSColorFromCppColor(circle.fillColor)];
         }
 
         // Draw rects
         for (const GuiRect& rect : self.windowState->rects)
         {
             [self drawRectWithTopLeft:NSMakePoint(rect.topLeft.first, rect.topLeft.second)
-                        bottomRight:NSMakePoint(rect.bottomRight.first, rect.bottomRight.second)
-                        color:NSColorFromCppColor(rect.borderColor)];
+                          bottomRight:NSMakePoint(rect.bottomRight.first, rect.bottomRight.second)
+                                color:NSColorFromCppColor(rect.borderColor)];
         }
-
 
         // Draw text
         for (const GuiText& text : self.windowState->text)
@@ -541,28 +550,28 @@ NSColor* NSColorFromCppColor(const cpplot2d::Color& cppColor)
             {
                 if (text.alignment == cpplot2d::detail::Alignment::LEFT)
                 {
-                [self drawText:[NSString stringWithUTF8String:text.text.c_str()]
-                       atPoint:NSMakePoint(text.pos.first, text.pos.second)
-                        color:NSColorFromCppColor(text.color)
-                        fontName:[NSString stringWithUTF8String:text.font.c_str()]
-                        size:text.size];
+                    [self drawText:[NSString stringWithUTF8String:text.text.c_str()]
+                           atPoint:NSMakePoint(text.pos.first, text.pos.second)
+                             color:NSColorFromCppColor(text.color)
+                          fontName:[NSString stringWithUTF8String:text.font.c_str()]
+                              size:text.size];
                 }
                 else
                 {
                     [self drawRightAlignedText:[NSString stringWithUTF8String:text.text.c_str()]
-                       atPoint:NSMakePoint(text.pos.first, text.pos.second)
-                        color:NSColorFromCppColor(text.color)
-                        fontName:[NSString stringWithUTF8String:text.font.c_str()]
-                        size:text.size];
+                                       atPoint:NSMakePoint(text.pos.first, text.pos.second)
+                                         color:NSColorFromCppColor(text.color)
+                                      fontName:[NSString stringWithUTF8String:text.font.c_str()]
+                                          size:text.size];
                 }
             }
             else if (text.orientation == cpplot2d::detail::Orientation::VERTICAL)
             {
                 [self drawVerticalText:[NSString stringWithUTF8String:text.text.c_str()]
                                atPoint:NSMakePoint(text.pos.first, text.pos.second)
-                                color:NSColorFromCppColor(text.color)
-                                fontName:[NSString stringWithUTF8String:text.font.c_str()]
-                                size:text.size];
+                                 color:NSColorFromCppColor(text.color)
+                              fontName:[NSString stringWithUTF8String:text.font.c_str()]
+                                  size:text.size];
             }
         }
     }
@@ -696,6 +705,7 @@ class Plot2D
     using Point = detail::Point;
     using Pointf = detail::Pointf;
     using Dimension2d = detail::Dimension2d;
+    using Dimension2df = detail::Dimension2df;
     using GuiLine = detail::GuiLine;
     using GuiPolyline = detail::GuiPolyline;
     using GuiText = detail::GuiText;
@@ -883,12 +893,12 @@ class Plot2D
     void HandlePanDrag(IWindow& w, Point mousePos);
     void Zoom(WindowRect rect, IWindow& w);
     const bool IsPointInsideRect(const Point& p, const WindowRect& rect);
-    std::pair<float, float> GetPlotBorderOffsets();
+    Pointf GetPlotBorderOffsets();
     void SetViewportRect(const WindowRect& rect);
-    void SetPlotBorderOffsets(std::pair<float, float> offsets);
+    void SetPlotBorderOffsets(Pointf offsets);
     void UpdateViewportWindowScaleFactors(const Dimension2d& windowSize);
     Pointf GetViewportToWindowScaleFactor(const Dimension2d& windowSize);
-    std::pair<float, float> GetTransformedCoordinates(Point coord);
+    Pointf GetTransformedCoordinates(Point coord);
     void UpdatePlotWindowState(WindowState* windowState, IWindow& window);
     void InitializePlotState(WindowState* windowState);
     void GetDataPolyline(const LineSeries& series, const WindowRect&, GuiPolyline& output);
@@ -913,10 +923,9 @@ class Plot2D
         std::vector<ScatterSeries> points = {};
     } m_dataSeries;
     std::vector<Point> m_polylineBuffer = {};
-    std::pair<float, float> m_plotZeroOffsets = {(std::numeric_limits<float>::max)(),
-                                                 (std::numeric_limits<float>::max)()};
-    std::pair<float, float> m_plotBorderOffsets = {0.f,
-                                                   0.f};  // offsets from window edge to plot area
+    Dimension2df m_plotZeroOffsets = {(std::numeric_limits<float>::max)(),
+                                      (std::numeric_limits<float>::max)()};
+    Dimension2df m_plotBorderOffsets = {0.f, 0.f};  // offsets from window edge to plot area
 
     WindowRect m_viewportRect = {0, 0, 0, 0};  // current viewport in window space
     const std::string m_font = "Tahoma";
@@ -1318,22 +1327,20 @@ cpplot2d::Plot2D::GetPlotBorderTickLines(const WindowRect& rect, Color color)
 
         label.str("");
         label << std::setprecision(3) << offset;
-        labels.push_back(GuiText(
-            label.str(),
-            Point(
-                {std::max(10, leftBorderPos - charSize.first - m_tickLength),
-                 y - (int)(0.5* charSize.second)}),
-            1, color, Orientation::HORIZONTAL, 10, m_font, Alignment::RIGHT));
+        labels.push_back(GuiText(label.str(),
+                                 Point({std::max(10, leftBorderPos - charSize.first - m_tickLength),
+                                        y - (int)(0.5 * charSize.second)}),
+                                 1, color, Orientation::HORIZONTAL, 10, m_font, Alignment::RIGHT));
     }
     ticks.push_back(GuiLine({leftBorderPos - m_tickLength, topBorderPos},
                             {leftBorderPos + m_tickLength, topBorderPos}, color));
     label.str("");
     label << std::setprecision(3) << offset;
-    labels.push_back(GuiText(
-        label.str(),
-        Point({std::max(10, int(leftBorderPos - charSize.first - m_tickLength)),
-               topBorderPos - (int)(0.5 * charSize.second)}),
-        1, color, Orientation::HORIZONTAL, 10, m_font, Alignment::RIGHT));
+    labels.push_back(
+        GuiText(label.str(),
+                Point({std::max(10, int(leftBorderPos - charSize.first - m_tickLength)),
+                       topBorderPos - (int)(0.5 * charSize.second)}),
+                1, color, Orientation::HORIZONTAL, 10, m_font, Alignment::RIGHT));
 
     return {ticks, labels};
 }
@@ -1642,11 +1649,11 @@ void cpplot2d::Plot2D::Show(bool block)
     m_window->SetIsVisible(true);
     if (block) m_window->RunEventLoop();
 }
-inline std::pair<float, float> cpplot2d::Plot2D::GetPlotBorderOffsets()
+inline cpplot2d::Plot2D::Pointf cpplot2d::Plot2D::GetPlotBorderOffsets()
 {
     return m_plotBorderOffsets;
 }
-void cpplot2d::Plot2D::SetPlotBorderOffsets(std::pair<float, float> offsets)
+void cpplot2d::Plot2D::SetPlotBorderOffsets(Pointf offsets)
 {
     m_plotBorderOffsets = offsets;
 }
@@ -1660,7 +1667,7 @@ void cpplot2d::Plot2D::OnWindowResizeCallback(IWindow& window)
     Dimension2d size = window.GetRect().Size();
     float verticalOffset = (float)size.second * m_plotBorderOffsetFactor;
     float horizontalOffset = (float)size.first * m_plotBorderOffsetFactor;
-    SetPlotBorderOffsets(std::pair<float, float>{horizontalOffset, verticalOffset});
+    SetPlotBorderOffsets(Pointf{horizontalOffset, verticalOffset});
     SetViewportRect(WindowRect(size.second - (int)verticalOffset, (int)horizontalOffset,
                                size.first - (int)horizontalOffset, (int)verticalOffset));
 
@@ -2370,7 +2377,6 @@ void cpplot2d::Plot2D::Win32Window::DoDrawText(HDC hdc, GuiText text, RECT clien
     else
     {
         font = CreateVerticalFont(height, text.font);
-        
     }
 
     if (text.alignment != Alignment::RIGHT)
@@ -2781,7 +2787,7 @@ void Plot2D::CocoaWindow::AddMenuButtons(const std::string menu, MenuButtons men
         [[NSMenuItem alloc] initWithTitle:menuTitle action:nil keyEquivalent:@""];
     [mainMenu addItem:menuItem];
 
-   NSMenu* submenu = [[NSMenu alloc] initWithTitle:menuTitle];
+    NSMenu* submenu = [[NSMenu alloc] initWithTitle:menuTitle];
     [menuItem setSubmenu:submenu];
 
     // Add buttons to the menu
