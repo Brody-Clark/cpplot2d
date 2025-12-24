@@ -17,6 +17,8 @@
 > 
 > Planned features (In progress): Linux (X11) support, deafult color themes
 
+!["Demo Screenshot"](docs/PlotDemo.png)
+
 ## About
 
 **cpplot2d** is a cross-platform, header-only 2D plotting library for C++ designed for speed and simplicity. The library is:
@@ -122,13 +124,6 @@ int main()
 
 }
 ```
-
----
-
-**Sample plot:**
-
-!["Demo Screenshot"](docs/PlotDemo.png)
-
 ---
 
 ## Contributing
