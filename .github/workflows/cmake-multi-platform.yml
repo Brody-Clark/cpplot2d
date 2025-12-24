@@ -81,4 +81,5 @@ jobs:
       with:
         style: 'file'
         database: ${{ steps.strings.outputs.build-output-dir }}
+        thread-comments: true
       
