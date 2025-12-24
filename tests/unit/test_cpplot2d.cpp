@@ -1,5 +1,6 @@
 #include <catch2/catch_test_macros.hpp>
 #include <vector>
+#define CPPLOT2D_IMPLEMENTATION
 #include "../../include/cpplot2d.h"
 
 TEST_CASE("Basic test", "[plot]")

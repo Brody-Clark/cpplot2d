@@ -1,4 +1,5 @@
 #include <benchmark/benchmark.h>
+#define CPPLOT2D_IMPLEMENTATION
 #include "cpplot2d.h"
 
 
@@ -10,14 +11,14 @@ class Plot2DBenchmark : public cpplot2d::Plot2D
         : cpplot2d::Plot2D()
         {
         }
-        Plot2D::GuiPolyline TestGetDataPolyline(const std::vector<float>& x,
+        void TestGetDataPolyline(const std::vector<float>& x,
                                                 const std::vector<float>& y,
                                                 cpplot2d::Color color, 
-                                                const WindowRect& rect)
+                                                const WindowRect& rect, GuiPolyline& output)
         {
             LineSeries series(x, y, cpplot2d::Color::Black(), 1);
            
-            return GetDataPolyline(series, rect);
+            GetDataPolyline(series, rect, output);
         }
 
     // Minimal mock window implementation
@@ -86,11 +87,11 @@ static void BM_GetDataPolyline(benchmark::State& state)
     // Construct Plot
     Plot2DBenchmark plot(xs, ys, "benchmark_plot");
     Plot2DBenchmark::MockWindow mockWindow(800, 600);
-
+    cpplot2d::detail::GuiPolyline line;
     for (auto _ : state)
     {
-        auto poly = plot.TestGetDataPolyline(xs, ys, cpplot2d::Color::Green(), mockWindow.GetRect());
-        benchmark::DoNotOptimize(poly);
+        plot.TestGetDataPolyline(xs, ys, cpplot2d::Color::Green(), mockWindow.GetRect(), line);
+        //benchmark::DoNotOptimize(poly);
     }
 }
 
