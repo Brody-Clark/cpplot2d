@@ -1,5 +1,10 @@
 cmake_minimum_required(VERSION 3.15)
-project(ccplot2d LANGUAGES CXX OBJCXX)
+project(ccplot2d LANGUAGES CXX)\
+
+# Only enable OBJCXX if we are on an Apple platform
+if (APPLE)
+    enable_language(OBJCXX)
+endif()
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
