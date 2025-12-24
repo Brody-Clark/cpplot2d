@@ -75,3 +75,10 @@ jobs:
       working-directory: ${{ steps.strings.outputs.build-output-dir }}
       # Execute tests defined by the CMake configuration. Note that --build-config is needed because the default Windows generator is a multi-config generator (Visual Studio generator).
       run: ctest --build-config ${{ matrix.build_type }}
+
+    - name: C/C++ Linter
+      uses: cpp-linter/cpp-linter-action@v2
+      with:
+        style: 'file'
+        database: ${{ steps.strings.outputs.build-output-dir }}
+      
