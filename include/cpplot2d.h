@@ -1,3 +1,43 @@
+/**********************************************************************************************
+ *
+ *                                    ░██               ░██     ░██████         ░██
+ *                                    ░██               ░██    ░██   ░██        ░██
+ *   ░███████  ░████████  ░████████   ░██  ░███████  ░████████       ░██  ░████████
+ *   ░██    ░██ ░██    ░██ ░██    ░██ ░██ ░██    ░██    ░██      ░█████  ░██    ░██
+ *   ░██        ░██    ░██ ░██    ░██ ░██ ░██    ░██    ░██     ░██      ░██    ░██
+ *   ░██    ░██ ░███   ░██ ░███   ░██ ░██ ░██    ░██    ░██    ░██       ░██   ░███
+ *   ░███████  ░██░█████  ░██░█████   ░██  ░███████      ░████ ░████████  ░█████░██
+ *             ░██        ░██
+ *             ░██        ░██
+ *
+ *
+ *   cpplot2d v1.0.0
+ *
+ *   A cross-platform single-header-file-only c++ plotting library wtih zero third-party
+ *dependencies.
+ *
+ *   Copyright (c) 2025 BRODY CLARK
+ *
+ *   Permission is hereby granted, free of charge, to any person obtaining a copy
+ *   of this software and associated documentation files (the "Software"), to deal
+ *   in the Software without restriction, including without limitation the rights
+ *   to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ *   copies of the Software, and to permit persons to whom the Software is
+ *   furnished to do so, subject to the following conditions:
+ *
+ *   The above copyright notice and this permission notice shall be included in all
+ *   copies or substantial portions of the Software.
+ *
+ *   THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ *   IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ *   FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ *   AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ *   LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ *   OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ *   SOFTWARE.
+ *
+ *
+ **********************************************************************************************/
 #pragma once
 
 #include <algorithm>
@@ -205,12 +245,10 @@ struct GuiLine
 struct GuiText
 {
    public:
-    GuiText(const std::string& text, const Point pos, int spacing, const Color& color,
-            Orientation orientation, int size = 10, std::string font = "Tahoma",
-            Alignment alignment = Alignment::LEFT)
+    GuiText(const std::string& text, const Point pos, const Color& color, Orientation orientation,
+            int size = 10, std::string font = "Tahoma", Alignment alignment = Alignment::LEFT)
         : text(text),
           pos(pos),
-          spacing(spacing),
           color(color),
           orientation(orientation),
           size(size),
@@ -221,7 +259,6 @@ struct GuiText
     GuiText() = default;
     std::string text = "";
     Point pos = {-1, -1};
-    int spacing = 1;  // TODO remove
     int size = 10;
     std::string font = "Tahoma";
     Color color = Color::White();
@@ -623,7 +660,7 @@ NSColor* NSColorFromCppColor(const cpplot2d::Color& cppColor)
     [super setFrameSize:newSize];
     [self setNeedsDisplay:YES];
 }
-- (void)saveScreenshotAsPNG:(const std::string&)fileName
+- (void)SaveScreenshot:(const std::string&)fileName
 {
     // Show a save dialog
     NSSavePanel* savePanel = [NSSavePanel savePanel];
@@ -791,7 +828,7 @@ class Plot2D
         }
         WindowRect() = default;
 
-        Dimension2d Size()
+        const Dimension2d Size() const
         {
             return {right - left, top - bottom};
         }
@@ -838,8 +875,8 @@ class Plot2D
         // Adds a button to the menu bar
         virtual void AddMenuButtons(const std::string menu, MenuButtons menuButtons) = 0;
 
-        // Saves a screenshot of the window as a PNG file. fileName is the name of the file only.
-        virtual bool SaveScreenshotAsPNG(const std::string& fileName) = 0;
+        // Saves a screenshot of the window as an image file. fileName is the name of the file only.
+        virtual bool SaveScreenshot(const std::string& fileName) = 0;
 
         // Sets whether the window is visible or hidden
         virtual void SetIsVisible(bool isVisible) = 0;
@@ -996,7 +1033,7 @@ class Plot2D
         void InvalidateRegion(const WindowRect& rect, WindowState* windowState) override;
         bool BrowseForFolder(std::string& outFolder);
         WindowRect GetRect() override;
-        bool SaveScreenshotAsPNG(const std::string& fileName) override;
+        bool SaveScreenshot(const std::string& fileName) override;
         static LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
 
        private:
@@ -1031,8 +1068,94 @@ class Plot2D
     };
 
 #elif defined(__linux__)
-    // Linux-specific implementation would go here
+    class X11GraphicsContext : public cpplot2d::Plot2D::IGraphicsContext
+    {
+       public:
+        void Init() override;
+        void Shutdown() override;
+        IWindow* MakeWindow(WindowState* initialState, Dimension2d defaultSize, Dimension2d minSize,
+                            bool isVisible, const std::string& title) override;
+    };
 
+    class X11Window : public cpplot2d::Plot2D::IWindow
+    {
+       public:
+        X11Window(Dimension2d defaultWindowSize, Dimension2d pos, std::string title,
+                  WindowState* initialState);
+        ~X11Window() override;
+
+        Dimension2d GetAverageCharSize() override;
+        void AddMenuButtons(const std::string menu, MenuButtons menuButtons) override;
+        void SetIsVisible(bool isVisible) override;
+        void Invalidate(WindowState* windowState) override;
+        std::string GetTimestamp() override;
+        void RunEventLoop() override;
+        void InvalidateRegion(const WindowRect& rect, WindowState* windowState) override;
+        bool BrowseForFolder(std::string& outFolder);
+        WindowRect GetRect() override;
+        bool SaveScreenshot(const std::string& fileName) override;
+
+       protected:
+        struct DropdownMenuItem
+        {
+            std::string text;
+            std::function<void()> callback;
+            WindowRect bounds;
+        };
+        struct DropdownMenu
+        {
+            Window win;
+            int x, y, width, height;
+            std::vector<DropdownMenuItem> items;
+        };
+        struct Menu
+        {
+            std::string title;
+            // MenuButtons buttons;
+            WindowRect bounds;
+            DropdownMenu* dropdown = nullptr;
+        };
+        struct OpenMenuState
+        {
+            Menu* menu;
+            int selectedIndex;
+        };
+        Menu CreateMenu(const std::string& title, const MenuButtons& menuButtons);
+        void DrawWindowState(const WindowRect& rect, WindowState* windowState);
+        void DrawMenuBar();
+        void DrawTextVertical(XFontStruct* font, unsigned long background, unsigned long color,
+                              int x, int y, const char* str);
+        void DrawDropdownMenu(DropdownMenu* dropdownMenu);
+        void HandleMenuClick(int x, int y);
+        unsigned long ToX11Pixel(const Color& c);
+        XFontStruct* GetFontOfSize(int size);
+        uint8_t ExtractChannel(unsigned long pixel, unsigned long mask);
+        bool LoadFont();
+        // Returns the window rect minus the drawn top menu bar
+        WindowRect GetContentRect();
+
+       private:
+        std::vector<Menu> m_menus;
+        Color m_menuColor = Color(220, 220, 220);
+        Dimension2d m_windowDimensions;
+        const int m_menuBarHeight = 24;
+        WindowState* m_windowState;
+        std::vector<void*> m_menuCallbacks;
+        DropdownMenu* m_activeDropdown = nullptr;
+        XFontStruct* m_menuFont;
+        Pixmap m_backBuffer;
+        Display* m_display;
+        ::Window m_window;
+        int m_screen;
+        GC m_gc;          // graphics context
+        Atom m_wmDelete;  // window close atom
+        bool m_running;
+        std::unordered_map<uint32_t, unsigned long> m_colorCache;
+        std::unordered_map<int, XFontStruct*> m_sizeToFontCache;
+        const std::string m_fontFallbacks[5] = {
+            "-misc-fixed-medium-r-normal--13-120-75-75-C-70-iso8859-1", "fixed", "6x13", "8x13",
+            "9x15"};
+    };
 #elif defined(__APPLE__)
     class CocoaGraphicsContext : public cpplot2d::Plot2D::IGraphicsContext
     {
@@ -1060,7 +1183,7 @@ class Plot2D
         void InvalidateRegion(const WindowRect& rect, WindowState* windowState) override;
         bool BrowseForFolder(std::string& outFolder);
         WindowRect GetRect() override;
-        bool SaveScreenshotAsPNG(const std::string& fileName) override;
+        bool SaveScreenshot(const std::string& fileName) override;
 
        private:
         WindowState* m_windowState;
@@ -1299,7 +1422,7 @@ cpplot2d::Plot2D::GetPlotBorderTickLines(const WindowRect& rect, Color color)
         label << std::setprecision(3) << offset;
         labels.push_back(GuiText(
             label.str(), {x - charSize.first * 3, bottomBorderPos - m_tickLength - charSize.second},
-            1, color, Orientation::HORIZONTAL));
+            color, Orientation::HORIZONTAL));
     }
     ticks.push_back(GuiLine({rightBorderPos, bottomBorderPos + m_tickLength},
                             {rightBorderPos, bottomBorderPos - m_tickLength}, color));
@@ -1307,7 +1430,7 @@ cpplot2d::Plot2D::GetPlotBorderTickLines(const WindowRect& rect, Color color)
     label << std::setprecision(3) << offset + increment;
     labels.push_back(GuiText(
         label.str(),
-        {rightBorderPos - charSize.first * 3, bottomBorderPos - m_tickLength - charSize.second}, 1,
+        {rightBorderPos - charSize.first * 3, bottomBorderPos - m_tickLength - charSize.second},
         color, Orientation::HORIZONTAL));
 
     // Draw Y-axis ticks
@@ -1330,7 +1453,7 @@ cpplot2d::Plot2D::GetPlotBorderTickLines(const WindowRect& rect, Color color)
         labels.push_back(GuiText(label.str(),
                                  Point({std::max(10, leftBorderPos - charSize.first - m_tickLength),
                                         y - (int)(0.5 * charSize.second)}),
-                                 1, color, Orientation::HORIZONTAL, 10, m_font, Alignment::RIGHT));
+                                 color, Orientation::HORIZONTAL, 10, m_font, Alignment::RIGHT));
     }
     ticks.push_back(GuiLine({leftBorderPos - m_tickLength, topBorderPos},
                             {leftBorderPos + m_tickLength, topBorderPos}, color));
@@ -1340,7 +1463,7 @@ cpplot2d::Plot2D::GetPlotBorderTickLines(const WindowRect& rect, Color color)
         GuiText(label.str(),
                 Point({std::max(10, int(leftBorderPos - charSize.first - m_tickLength)),
                        topBorderPos - (int)(0.5 * charSize.second)}),
-                1, color, Orientation::HORIZONTAL, 10, m_font, Alignment::RIGHT));
+                color, Orientation::HORIZONTAL, 10, m_font, Alignment::RIGHT));
 
     return {ticks, labels};
 }
@@ -1354,15 +1477,15 @@ std::vector<cpplot2d::Plot2D::GuiText> cpplot2d::Plot2D::GetPlotLabels(const Win
     labels[0] = GuiText(xLabel,
                         Point((int)(rect.right / 2) - (int)xLabel.size() * charSize.first,
                               rect.bottom + charSize.second),
-                        1, color, Orientation::HORIZONTAL, 12, font);  // X-axis label
+                        color, Orientation::HORIZONTAL, 12, font);  // X-axis label
     labels[1] = GuiText(yLabel,
                         Point(rect.left + charSize.second,
                               (int)((rect.top - (int)yLabel.size() * charSize.first) / 2)),
-                        1, color, Orientation::VERTICAL, 12, font);  // Y-axis label
+                        color, Orientation::VERTICAL, 12, font);  // Y-axis label
     labels[2] = GuiText(title,
                         Point((int)(rect.right / 2) - (int)title.size() * charSize.first,
                               rect.top - (int)m_plotBorderOffsets.second + charSize.second),
-                        1, color, Orientation::HORIZONTAL, 14, font);  // Plot title
+                        color, Orientation::HORIZONTAL, 14, font);  // Plot title
 
     return labels;
 }
@@ -1765,18 +1888,19 @@ void cpplot2d::Plot2D::HandleMouseHover(IWindow& w, Point mousePos)
         int y = rect.top - 1 - m_charSize.second;
 
         m_coordinateViewState->text = {
-            GuiText(coordText, Point(x, y), 1, Color::White(), Orientation::HORIZONTAL)};
+            GuiText(coordText, Point(x, y), Color::White(), Orientation::HORIZONTAL)};
         m_coordinateViewState->background = Color::Black();
         w.InvalidateRegion(mouseCoordinateRect, m_coordinateViewState.get());
         m_invalidateMouseCoordRegion = true;
     }
     else if (m_invalidateMouseCoordRegion)
     {
-        // Clear previous mouse coordinate region only once when mouse leaves plot area
+        // Invalidate only once when mouse leaves plot area
         m_invalidateMouseCoordRegion = false;
-        m_coordinateViewState->text = {};
-        m_coordinateViewState->background = Color::Black();
-        w.InvalidateRegion(mouseCoordinateRect, m_coordinateViewState.get());
+
+        // Invalidate whole plot window to clear mouse coordinate text
+        // and make sure any overlapped elements are redrawn
+        w.Invalidate(m_plotWindowState.get());
     }
 }
 
@@ -1853,7 +1977,7 @@ void cpplot2d::Plot2D::Zoom(WindowRect zoomRect, IWindow& w)
 
 void cpplot2d::Plot2D::OnSaveClicked(IWindow& w)
 {
-    w.SaveScreenshotAsPNG(title + "_" + w.GetTimestamp());
+    w.SaveScreenshot(title + "_" + w.GetTimestamp());
 }
 void cpplot2d::Plot2D::OnToggleZoomClicked(IWindow& w)
 {
@@ -1875,7 +1999,7 @@ void cpplot2d::Plot2D::OnToggleZoomClicked(IWindow& w)
 cpplot2d::detail::GuiText cpplot2d::Plot2D::GetInteractionText(const std::string& label,
                                                                WindowRect rect)
 {
-    return GuiText(label, Point(rect.left + 5, rect.top - m_charSize.second), 1, Color::Green(),
+    return GuiText(label, Point(rect.left + 5, rect.top - m_charSize.second), Color::Green(),
                    Orientation::HORIZONTAL);
 }
 
@@ -1916,14 +2040,22 @@ std::string cpplot2d::Plot2D::FileName::Create(const std::string& dir, const std
     std::string safeFilename = filename;
     std::replace(safeFilename.begin(), safeFilename.end(), ':', '_');
 
-    std::string name = dir + "\\" + safeFilename;  // TODO: cross-platform
+#ifdef _WIN32
+    std::string sep = "\\";
+#elif defined(__APPLE__)
+    std::string sep = "/"
+#elif defined(__linux__)
+    std::string sep = "/";
+#endif
+
+    std::string name = dir + sep + safeFilename;
     return name;
 }
 
 #ifdef _WIN32
 void cpplot2d::Plot2D::Win32Window::RunEventLoop()
 {
-    // Standard Win32 blocking message loop � exits when WindowProc posts PostQuitMessage
+    // Standard Win32 blocking message loop exits when WindowProc posts PostQuitMessage
     MSG msg;
     while (GetMessage(&msg, nullptr, 0, 0) > 0)
     {
@@ -2039,7 +2171,7 @@ void cpplot2d::Plot2D::Win32Window::SetIsVisible(bool isVisible)
     ShowWindow(m_hwnd, isVisible);
 }
 
-bool cpplot2d::Plot2D::Win32Window::SaveScreenshotAsPNG(const std::string& fileName)
+bool cpplot2d::Plot2D::Win32Window::SaveScreenshot(const std::string& fileName)
 {
     std::string dir;
     if (BrowseForFolder(dir))
@@ -2878,15 +3010,711 @@ Plot2D::WindowRect Plot2D::CocoaWindow::GetRect()
     NSRect contentRect = [window contentRectForFrameRect:[window frame]];
     return WindowRect(contentRect.size.height, 0, contentRect.size.width, 0);
 }
-bool Plot2D::CocoaWindow::SaveScreenshotAsPNG(const std::string& fileName)
+bool Plot2D::CocoaWindow::SaveScreenshot(const std::string& fileName)
 {
     WindowView* view = reinterpret_cast<WindowView*>(m_windowView);
-    [view saveScreenshotAsPNG:fileName];
+    [view SaveScreenshot:fileName];
     return true;
 }
 // NOLINTEND(readability-*, modernize-*, bugprone-*)
 #endif  // __OBJC__
 #endif  //__APPLE__
 
+#ifdef __linux__
+void cpplot2d::Plot2D::X11GraphicsContext::Init()
+{
+}
+
+void cpplot2d::Plot2D::X11GraphicsContext::Shutdown()
+{
+}
+cpplot2d::Plot2D::IWindow* cpplot2d::Plot2D::X11GraphicsContext::MakeWindow(
+    WindowState* initialState, Dimension2d defaultSize, Dimension2d minSize, bool isVisible,
+    const std::string& title)
+{
+    return new X11Window(defaultSize, Dimension2d(0, 0), title, initialState);
+}
+
+cpplot2d::Plot2D::X11Window::X11Window(Dimension2d defaultWindowSize, Dimension2d pos,
+                                       std::string title, WindowState* initialState)
+{
+    m_display = XOpenDisplay(nullptr);
+    if (!m_display)
+    {
+        throw std::runtime_error("Failed to open X display.");
+    }
+    m_screen = DefaultScreen(m_display);
+    Window root = RootWindow(m_display, m_screen);
+    m_window = XCreateSimpleWindow(
+        m_display, root, pos.first, pos.second,  // x, y (window position)
+        defaultWindowSize.first,
+        defaultWindowSize.second,  // window size
+        1,                         // border width
+        ToX11Pixel(initialState->background), ToX11Pixel(initialState->background));
+
+    XSetWindowAttributes attrs;
+    // Pin the current contents to the top-left (0,0) during resize
+    attrs.bit_gravity = StaticGravity;
+    attrs.background_pixmap = None;
+    XChangeWindowAttributes(m_display, m_window, CWBackPixmap | CWBitGravity, &attrs);
+    XSelectInput(m_display, m_window,
+                 ExposureMask | KeyPressMask | KeyReleaseMask | ButtonPressMask |
+                     ButtonReleaseMask | PointerMotionMask | StructureNotifyMask);
+    m_windowDimensions = defaultWindowSize;
+
+    m_wmDelete = XInternAtom(m_display, "WM_DELETE_WINDOW", False);
+    XSetWMProtocols(m_display, m_window, &m_wmDelete, 1);
+
+    XStoreName(m_display, m_window, title.c_str());
+
+    // Create graphics context
+    m_gc = XCreateGC(m_display, m_window, 0, nullptr);
+    XSetLineAttributes(m_display, m_gc,
+                       1,  // line width
+                       LineSolid, CapButt, JoinMiter);
+
+    // Load menu font
+    if (!LoadFont())
+    {
+        throw std::runtime_error("Failed to load font for menu.");
+    }
+}
+cpplot2d::Plot2D::X11Window::~X11Window()
+{
+    for (Menu& menu : m_menus)
+    {
+        if (menu.dropdown)
+        {
+            XDestroyWindow(m_display, menu.dropdown->win);
+            delete menu.dropdown;
+        }
+    }
+    auto it = m_sizeToFontCache.begin();
+    auto end = m_sizeToFontCache.end();
+    for (; it != end; ++it)
+    {
+        if (it->second) XFreeFont(m_display, it->second);
+    }
+    m_sizeToFontCache.clear();
+    if (m_gc) XFreeGC(m_display, m_gc);
+    if (m_backBuffer) XFreePixmap(m_display, m_backBuffer);
+    XDestroyWindow(m_display, m_window);
+    XCloseDisplay(m_display);
+}
+cpplot2d::Plot2D::Dimension2d cpplot2d::Plot2D::X11Window::GetAverageCharSize()
+{
+    XFontStruct* font = XLoadQueryFont(m_display, "fixed");
+    if (!font)
+    {
+        throw std::runtime_error("Failed to load font 'fixed'.");
+    }
+    return {font->max_bounds.width, font->ascent + font->descent};
+}
+void cpplot2d::Plot2D::X11Window::AddMenuButtons(const std::string menu, MenuButtons menuButtons)
+{
+    m_menus.push_back(CreateMenu(menu, menuButtons));
+}
+cpplot2d::Plot2D::X11Window::Menu cpplot2d::Plot2D::X11Window::CreateMenu(
+    const std::string& title, const MenuButtons& menuButtons)
+{
+    int x = 4;  // Start with some padding
+    Menu menu;
+    menu.title = title;
+    int textWidth = XTextWidth(m_menuFont, menu.title.c_str(), menu.title.length());
+    menu.bounds = {0, x, x + textWidth + 16, m_menuBarHeight};
+
+    const int itemHeight = 20;
+    const int itemWidth = 100;
+
+    XSetWindowAttributes attrs;
+    attrs.override_redirect = True;  // No borders/decorations
+    attrs.background_pixel = ToX11Pixel(m_menuColor);
+    attrs.event_mask = ExposureMask | ButtonPressMask | PointerMotionMask;
+
+    DropdownMenu* dropdownMenu = new DropdownMenu();
+    dropdownMenu->x = menu.bounds.left;
+    dropdownMenu->y = m_menuBarHeight;  // Below menu bar
+    dropdownMenu->width = 100;          // Default width
+    dropdownMenu->height = itemHeight * static_cast<int>(menuButtons.size());
+    dropdownMenu->win = XCreateWindow(
+        m_display, m_window, 0, 0, dropdownMenu->width, dropdownMenu->height, 1, CopyFromParent,
+        InputOutput, CopyFromParent, CWOverrideRedirect | CWBackPixel | CWEventMask, &attrs);
+
+    int y = 0;
+    for (const auto& pair : menuButtons)
+    {
+        DropdownMenuItem item;
+        item.text = pair.first;
+        item.callback = pair.second;
+        item.bounds = {y, menu.bounds.left, dropdownMenu->width, y + itemHeight};
+        dropdownMenu->items.push_back(item);
+        y += itemHeight;
+    }
+
+    menu.dropdown = dropdownMenu;
+
+    return menu;
+}
+void cpplot2d::Plot2D::X11Window::DrawDropdownMenu(DropdownMenu* dropdownMenu)
+{
+    // Clear dropdown background
+    XSetForeground(m_display, m_gc, ToX11Pixel(m_menuColor));
+    XFillRectangle(m_display, dropdownMenu->win, m_gc, 0, 0, dropdownMenu->width,
+                   dropdownMenu->height);
+
+    XSetForeground(m_display, m_gc, ToX11Pixel(Color{0, 0, 0}));
+    XSetFont(m_display, m_gc, m_menuFont->fid);
+
+    // Draw menu items onto the dropdown window
+    for (const DropdownMenuItem& item : dropdownMenu->items)
+    {
+        XDrawString(m_display, dropdownMenu->win, m_gc, item.bounds.left, item.bounds.bottom - 4,
+                    item.text.c_str(), static_cast<int>(item.text.length()));
+    }
+}
+void cpplot2d::Plot2D::X11Window::SetIsVisible(bool isVisible)
+{
+    if (isVisible)
+        XMapWindow(m_display, m_window);
+    else
+        XUnmapWindow(m_display, m_window);
+
+    XFlush(m_display);
+}
+void cpplot2d::Plot2D::X11Window::Invalidate(WindowState* windowState)
+{
+    XClearWindow(m_display, m_window);
+    m_windowState = windowState;
+
+    DrawWindowState(WindowRect(m_windowDimensions.second, 0, m_windowDimensions.first, 0),
+                    windowState);
+}
+std::string cpplot2d::Plot2D::X11Window::GetTimestamp()
+{
+    auto now = std::chrono::system_clock::now();
+    std::time_t t = std::chrono::system_clock::to_time_t(now);
+
+    char buf[64];
+    std::strftime(buf, sizeof(buf), "%Y%m%d%H%M%S", std::localtime(&t));
+    return buf;
+}
+void cpplot2d::Plot2D::X11Window::RunEventLoop()
+{
+    m_running = true;
+
+    while (m_running)
+    {
+        XEvent ev;
+        XNextEvent(m_display, &ev);
+
+        switch (ev.type)
+        {
+            case Expose:
+                if (m_activeDropdown && ev.xexpose.window == m_activeDropdown->win)
+                {
+                    DrawDropdownMenu(m_activeDropdown);
+                }
+                else if (ev.xexpose.window == m_window && ev.xexpose.count == 0)
+                {
+                    if (m_windowState) Invalidate(m_windowState);
+                }
+                break;
+
+            case ConfigureNotify:
+                // Window resized
+                // Resize back buffer
+                m_windowDimensions = Dimension2d(ev.xconfigure.width, ev.xconfigure.height);
+                if (m_backBuffer) XFreePixmap(m_display, m_backBuffer);
+
+                m_backBuffer =
+                    XCreatePixmap(m_display, m_window, ev.xconfigure.width, ev.xconfigure.height,
+                                  DefaultDepth(m_display, m_screen));
+
+                if (OnResizeCallback) OnResizeCallback();
+                break;
+
+            case ButtonPress:
+
+                if (ev.xbutton.window == m_window)
+                {
+                    if (ev.xbutton.y < m_menuBarHeight)
+                    {
+                        HandleMenuClick(ev.xbutton.x, ev.xbutton.y);
+                        break;
+                    }
+                    else
+                    {
+                        if (m_activeDropdown)
+                        {
+                            XUnmapWindow(m_display, m_activeDropdown->win);
+                            m_activeDropdown = nullptr;
+                        }
+
+                        if (OnMouseLButtonDownCallback)
+                            OnMouseLButtonDownCallback(
+                                Point(ev.xbutton.x, m_windowDimensions.second - ev.xbutton.y));
+                        break;
+                    }
+                }
+                else if (m_activeDropdown && (ev.xbutton.window == m_activeDropdown->win))
+                {
+                    std::vector<DropdownMenuItem> items = m_activeDropdown->items;
+
+                    // Close the dropdown first to avoid redraw issues
+                    XUnmapWindow(m_display, m_activeDropdown->win);
+                    m_activeDropdown = nullptr;
+
+                    // Check if click is within any dropdown menu item
+                    for (const DropdownMenuItem& item : items)
+                    {
+                        if (ev.xbutton.x >= item.bounds.left && ev.xbutton.x <= item.bounds.right &&
+                            ev.xbutton.y >= item.bounds.top && ev.xbutton.y <= item.bounds.bottom)
+                        {
+                            // Invoke the callback
+                            if (item.callback)
+                            {
+                                item.callback();
+                            }
+
+                            break;
+                        }
+                    }
+                    break;
+                }
+
+                break;
+            case ButtonRelease:
+                if (OnMouseLButtonUpCallback)
+                    OnMouseLButtonUpCallback(
+                        Point(ev.xbutton.x, m_windowDimensions.second - ev.xbutton.y));
+                break;
+
+            case MotionNotify:
+                if (ev.xmotion.window == m_window)
+                {
+                    XEvent nextEvent;
+                    // Peek at the queue and discard all older MotionNotify events
+                    while (XCheckTypedWindowEvent(m_display, m_window, MotionNotify, &nextEvent))
+                    {
+                        ev = nextEvent;  // Keep overwriting 'ev' with the newer data
+                    }
+                    if (!m_activeDropdown && ev.xmotion.y > m_menuBarHeight)
+                    {
+                        if (OnMouseMoveCallback)
+                            OnMouseMoveCallback(
+                                Point(ev.xmotion.x, m_windowDimensions.second - ev.xmotion.y));
+                    }
+                    break;
+                }
+                break;
+
+            case KeyPress:
+            case KeyRelease:
+                break;
+
+            case ClientMessage:
+                if ((Atom)ev.xclient.data.l[0] == m_wmDelete)
+                {
+                    m_running = false;
+                }
+                break;
+        }
+    }
+}
+void cpplot2d::Plot2D::X11Window::HandleMenuClick(int x, int y)
+{
+    for (const Menu& menu : m_menus)
+    {
+        WindowRect bounds = menu.bounds;
+        if (x < bounds.right && x > bounds.left && y > bounds.top && y < bounds.bottom)
+        {
+            if (m_activeDropdown)
+            {
+                if (m_activeDropdown == menu.dropdown)
+                {
+                    // Close the dropdown if it's already open
+                    XUnmapWindow(m_display, m_activeDropdown->win);
+                    m_activeDropdown = nullptr;
+                    return;
+                }
+
+                // Open new dropdown menu and close any existing
+                XUnmapWindow(m_display, m_activeDropdown->win);
+                XMoveResizeWindow(m_display, menu.dropdown->win, menu.dropdown->x, menu.dropdown->y,
+                                  menu.dropdown->width, menu.dropdown->height);
+                XMapWindow(m_display, menu.dropdown->win);
+                XRaiseWindow(m_display, menu.dropdown->win);
+                m_activeDropdown = menu.dropdown;
+                return;
+            }
+            else
+            {
+                // Open the dropdown menu
+                XMoveResizeWindow(m_display, menu.dropdown->win, menu.dropdown->x, menu.dropdown->y,
+                                  menu.dropdown->width, menu.dropdown->height);
+                XMapWindow(m_display, menu.dropdown->win);
+                XRaiseWindow(m_display, menu.dropdown->win);
+                m_activeDropdown = menu.dropdown;
+                return;
+            }
+        }
+    }
+
+    // Clicked outside any menu, close any active dropdown
+    if (m_activeDropdown)
+    {
+        XUnmapWindow(m_display, m_activeDropdown->win);
+        m_activeDropdown = nullptr;
+    }
+}
+void cpplot2d::Plot2D::X11Window::InvalidateRegion(const WindowRect& rect, WindowState* windowState)
+{
+    m_windowState = windowState;
+    DrawWindowState(rect, windowState);
+}
+bool cpplot2d::Plot2D::X11Window::BrowseForFolder(std::string& outFolder)
+{
+    // Try to call Zenity
+    // Use 'which' to check if it exists first to avoid shell errors
+    FILE* check = popen("which zenity 2>/dev/null", "r");
+    bool hasZenity = (check && fgetc(check) != EOF);
+    if (check) pclose(check);
+
+    if (hasZenity)
+    {
+        FILE* f = popen(
+            "zenity --file-selection --save --confirm-overwrite "
+            "--directory --title='Choose a Directory'",
+            "r");
+        if (f)
+        {
+            char path[1024];
+            if (fgets(path, sizeof(path), f))
+            {
+                std::string s(path);
+                if (!s.empty() && s.back() == '\n') s.pop_back();
+                pclose(f);
+                if (!s.empty())
+                {
+                    outFolder = s;
+                    return true;
+                }
+            }
+            pclose(f);
+        }
+        return false;
+    }
+
+    // No Zenity, fallback to default directory
+    outFolder = "";
+    return true;
+}
+cpplot2d::Plot2D::WindowRect cpplot2d::Plot2D::X11Window::GetRect()
+{
+    // Only return content rect, do not include top menu bar
+    return GetContentRect();
+}
+uint8_t cpplot2d::Plot2D::X11Window::ExtractChannel(unsigned long pixel, unsigned long mask)
+{
+    if (mask == 0) return 0;
+
+    int shift = 0;
+    while ((mask & 1) == 0)
+    {
+        mask >>= 1;
+        ++shift;
+    }
+
+    unsigned long value = (pixel >> shift) & mask;
+
+    // Normalize to 8-bit
+    return static_cast<uint8_t>((value * 255) / mask);
+}
+
+bool cpplot2d::Plot2D::X11Window::SaveScreenshot(const std::string& fileName)
+{
+    // Get directory
+    std::string folder;
+    if (!BrowseForFolder(folder))
+    {
+        return true;
+    }
+    // Force redraw to clear dropdown
+    Invalidate(m_windowState);
+
+    // Create image
+    WindowRect rect = GetContentRect();
+    Dimension2d size = rect.Size();
+    XImage* img = XGetImage(m_display, m_window, 0, m_menuBarHeight, size.first, size.second,
+                            AllPlanes, ZPixmap);
+    if (!img)
+    {
+        return false;
+    }
+
+    unsigned long pixel = XGetPixel(img, size.first, size.second);
+
+    std::vector<uint8_t> rgb;
+    rgb.resize(size.first * size.second * 3);
+
+    unsigned long redMask = 0x00FF0000;
+    unsigned long greenMask = 0x0000FF00;
+    unsigned long blueMask = 0x000000FF;
+    for (int y = 0; y < size.second; ++y)
+    {
+        for (int x = 0; x < size.first; ++x)
+        {
+            unsigned long p = XGetPixel(img, x, y);
+
+            uint8_t r = ExtractChannel(p, redMask);
+            uint8_t g = ExtractChannel(p, greenMask);
+            uint8_t b = ExtractChannel(p, blueMask);
+
+            int idx = (y * size.first + x) * 3;
+            rgb[idx + 0] = r;
+            rgb[idx + 1] = g;
+            rgb[idx + 2] = b;
+        }
+    }
+
+    std::ofstream ofs(folder + "/" + fileName, std::ios::binary);
+
+    // P6 = Binary RGB, width, height, 255 = max color value
+    ofs << "P6\n" << size.first << " " << size.second << "\n255\n";
+    ofs.write(reinterpret_cast<const char*>(rgb.data()), rgb.size());
+    ofs.close();
+
+    XDestroyImage(img);
+
+    return true;
+}
+
+inline unsigned long cpplot2d::Plot2D::X11Window::ToX11Pixel(const cpplot2d::Color& c)
+{
+    uint32_t key = (c.r << 16) | (c.g << 8) | c.b;
+
+    auto it = m_colorCache.find(key);
+    if (it != m_colorCache.end()) return it->second;
+
+    XColor xcol;
+    xcol.red = c.r * 257;
+    xcol.green = c.g * 257;
+    xcol.blue = c.b * 257;
+    xcol.flags = DoRed | DoGreen | DoBlue;
+
+    XAllocColor(m_display, DefaultColormap(m_display, m_screen), &xcol);
+
+    m_colorCache[key] = xcol.pixel;
+    return xcol.pixel;
+}
+XFontStruct* cpplot2d::Plot2D::X11Window::GetFontOfSize(int size)
+{
+    auto it = m_sizeToFontCache.find(size);
+    if (it != m_sizeToFontCache.end()) return it->second;
+
+    char fontSpec[256];
+    snprintf(fontSpec, sizeof(fontSpec), "-*-helvetica-medium-r-normal--0-%d-100-100-p-0-iso8859-1",
+             size * 10);
+    XFontStruct* font = XLoadQueryFont(m_display, fontSpec);
+    if (font)
+    {
+        m_sizeToFontCache[size] = font;
+        return font;
+    }
+    else
+    {
+        // Try fallback
+        snprintf(fontSpec, sizeof(fontSpec), "-*-*-medium-r-normal--0-%d-100-100-p-0-iso8859-1",
+                 size * 10);
+        font = XLoadQueryFont(m_display, fontSpec);
+        if (font)
+        {
+            m_sizeToFontCache[size] = font;
+            return font;
+        }
+    }
+
+    throw std::runtime_error("Failed to load font of size " + std::to_string(size));
+}
+void cpplot2d::Plot2D::X11Window::DrawWindowState(const WindowRect& rect, WindowState* windowState)
+{
+    Dimension2d size = m_windowDimensions;
+
+    // Fill background
+    XSetForeground(m_display, m_gc, ToX11Pixel(windowState->background));
+
+    XFillRectangle(m_display, m_backBuffer, m_gc, rect.left, size.second - rect.top,
+                   rect.right - rect.left, rect.top - rect.bottom);
+
+    // Draw polylines
+    std::vector<XPoint> pts;
+    for (const GuiPolyline& polyline : windowState->polylines)
+    {
+        pts.reserve(polyline.points.size());
+
+        for (auto& p : polyline.points)
+        {
+            pts.push_back(
+                {static_cast<short>(p.first), static_cast<short>(size.second - p.second)});
+        }
+
+        XSetForeground(m_display, m_gc, ToX11Pixel(polyline.color));
+        XDrawLines(m_display, m_backBuffer, m_gc, pts.data(), pts.size(), CoordModeOrigin);
+        pts.clear();
+    }
+
+    // Draw Lines
+    for (const GuiLine& line : windowState->lines)
+    {
+        XSetForeground(m_display, m_gc, ToX11Pixel(line.color));
+
+        XDrawLine(m_display, m_backBuffer, m_gc, line.p1.first, size.second - line.p1.second,
+                  line.p2.first, size.second - line.p2.second);
+    }
+
+    // Draw rects
+    for (const GuiRect& guiRect : windowState->rects)
+    {
+        XSetForeground(m_display, m_gc, ToX11Pixel(guiRect.borderColor));
+
+        XDrawRectangle(m_display, m_backBuffer, m_gc, guiRect.topLeft.first,
+                       size.second - guiRect.topLeft.second,
+                       guiRect.bottomRight.first - guiRect.topLeft.first,
+                       guiRect.topLeft.second - guiRect.bottomRight.second);
+    }
+
+    // Draw Circles
+    for (const GuiCircle& circle : windowState->circles)
+    {
+        XSetForeground(m_display, m_gc, ToX11Pixel(circle.fillColor));
+
+        int x = circle.center.first - circle.radius;
+        int y = size.second - (circle.center.second + circle.radius);
+        int d = circle.radius * 2;
+
+        XFillArc(m_display, m_backBuffer, m_gc, x, y, d, d, 0, 360 * 64);
+    }
+
+    // Draw text
+    for (const GuiText& text : windowState->text)
+    {
+        XFontStruct* font = GetFontOfSize(text.size);
+        XSetForeground(m_display, m_gc, ToX11Pixel(text.color));
+        XSetFont(m_display, m_gc, font->fid);
+        int width = XTextWidth(font, text.text.c_str(), text.text.length());
+        int posX = text.pos.first;
+
+        if (text.alignment == Alignment::RIGHT)
+        {
+            posX -= width;
+        }
+
+        if (text.orientation == Orientation::VERTICAL)
+        {
+            DrawTextVertical(font, ToX11Pixel(windowState->background), ToX11Pixel(text.color),
+                             posX, size.second - text.pos.second, text.text.c_str());
+        }
+        else
+        {
+            XDrawString(m_display, m_backBuffer, m_gc, posX, size.second - text.pos.second,
+                        text.text.c_str(), text.text.length());
+        }
+    }
+
+    // Draw at the end so it appears on top
+    DrawMenuBar();
+
+    // Draw back buffer
+    XCopyArea(m_display, m_backBuffer, m_window, m_gc, 0, 0, size.first, size.second, 0, 0);
+    XSync(m_display, False);
+    XFlush(m_display);
+}
+void cpplot2d::Plot2D::X11Window::DrawTextVertical(XFontStruct* font, unsigned long background,
+                                                   unsigned long color, int x, int y,
+                                                   const char* str)
+{
+    int len = strlen(str);
+    if (len == 0) return;
+
+    int width = XTextWidth(font, str, len);
+    int height = font->ascent + font->descent;
+    int depth = DefaultDepth(m_display, 0);
+
+    // Create a temporary Pixmap
+    Pixmap tmp = XCreatePixmap(m_display, m_window, width, height, depth);
+    XSetForeground(m_display, m_gc, background);
+    XFillRectangle(m_display, tmp, m_gc, 0, 0, width, height);
+
+    XSetForeground(m_display, m_gc, color);
+    XSetFont(m_display, m_gc, font->fid);
+    XDrawString(m_display, tmp, m_gc, 0, font->ascent, str, len);
+
+    XImage* horizImg = XGetImage(m_display, tmp, 0, 0, width, height, AllPlanes, ZPixmap);
+
+    // Allocate memory for the vertical image
+    // Swapping width/height. Assume 4 bytes per pixel (32-bit) for simplicity here
+    char* vertData = (char*)malloc(height * width * 4);
+    XImage* vertImg = XCreateImage(m_display, DefaultVisual(m_display, 0), depth, ZPixmap, 0,
+                                   vertData, height, width, 32, 0);
+
+    for (int ix = 0; ix < width; ix++)
+    {
+        for (int iy = 0; iy < height; iy++)
+        {
+            unsigned long pixel = XGetPixel(horizImg, ix, iy);
+
+            // Counter-clockwise 90: (ix, iy) -> (iy, (width-1) - ix)
+            XPutPixel(vertImg, iy, (width - 1) - ix, pixel);
+        }
+    }
+
+    // Push to backbuffer
+    XPutImage(m_display, m_backBuffer, m_gc, vertImg, 0, 0, x, y - width, height, width);
+
+    XDestroyImage(horizImg);
+    XDestroyImage(vertImg);
+    XFreePixmap(m_display, tmp);
+}
+inline cpplot2d::Plot2D::WindowRect cpplot2d::Plot2D::X11Window::GetContentRect()
+{
+    return WindowRect(m_windowDimensions.second - m_menuBarHeight, 0, m_windowDimensions.first, 0);
+}
+void cpplot2d::Plot2D::X11Window::DrawMenuBar()
+{
+    int x = 4;
+    int y = 0;
+    unsigned long menuBgColor = ToX11Pixel(m_menuColor);
+    unsigned long textColor = ToX11Pixel(Color(0, 0, 0));
+
+    // Background color
+    XSetForeground(m_display, m_gc, menuBgColor);
+    XFillRectangle(m_display, m_backBuffer, m_gc, 0, 0, m_windowDimensions.first, m_menuBarHeight);
+
+    for (auto& menu : m_menus)
+    {
+        int textWidth = XTextWidth(m_menuFont, menu.title.c_str(), menu.title.length());
+
+        menu.bounds = {0, x, x + textWidth + 16, m_menuBarHeight};
+
+        // Text color
+        XSetForeground(m_display, m_gc, textColor);
+        XDrawString(m_display, m_backBuffer, m_gc, x + 8, 16, menu.title.c_str(),
+                    menu.title.length());
+
+        x += textWidth + 24;
+    }
+}
+
+bool cpplot2d::Plot2D::X11Window::LoadFont()
+{
+    for (const std::string& name : m_fontFallbacks)
+    {
+        m_menuFont = XLoadQueryFont(m_display, name.c_str());
+        if (m_menuFont) return true;
+    }
+    return false;
+}
+
+#endif  // __linux__
 #endif  // CPPLOT2D_IMPLEMENTATION
 }  // namespace cpplot2d

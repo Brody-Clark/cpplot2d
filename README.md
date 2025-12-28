@@ -15,7 +15,7 @@
 >
 > _This project is actively being developed. Some features are incomplete or experimental._
 > 
-> Planned features (In progress): Linux (X11) support, deafult color themes
+> Planned features (In progress): Scatter plots, plot Legends, default color themes, hotkeys, action buttons
 
 !["Demo Screenshot"](docs/PlotDemo.png)
 
@@ -25,7 +25,7 @@
 
 - Easy to use (a single header file to include and simple API)
 - Self-contained (no external dependencies)
-- Capable of displaying plots or saving them as `.png` images
+- Capable of displaying plots or saving them as images (**_.png_** on **Windows/Apple** and **_.ppm_** on **Linux**)
 - Responsive even with large datasets
 
 ## Requirements
@@ -74,6 +74,41 @@ Then in your other files, simply include the `cpplot2d.h` header as needed.
 ```cpp
 // In all other files
 #include "cpplot2d.h"
+```
+## Building
+
+Because **cpplot2d** uses the native windowing systems of each OS to stay dependency-free, you must link the corresponding system libraries during compilation.
+
+### Linux (X11)
+
+On Linux, the library interfaces with the X Window System. You must link the `X11` library.
+
+```bash
+g++ main.cpp -lX11 -o my_plot
+```
+
+### Windows (GDI/User32)
+
+On Windows, the library uses the Win32 API. Most compilers link these by default, but if you are using MinGW or a strict manual build, ensure you link `gdi32` and `user32`.
+
+**MinGW / GCC:**
+
+```bash
+g++ main.cpp -lgdi32 -luser32 -o my_plot.exe
+```
+
+**MSVC (Command Line):**
+
+```bash
+cl main.cpp user32.lib gdi32.lib
+```
+
+### macOS (Cocoa/Quartz)
+
+As noted in the Usage section, macOS requires the Objective-C++ compiler (`clang++`) and linking against the `Cocoa` and `QuartzCore` frameworks. Ensure your implementation file has a `.mm` extension.
+
+```bash
+clang++ main.mm -framework Cocoa -framework QuartzCore -o my_plot
 ```
 
 ## Examples

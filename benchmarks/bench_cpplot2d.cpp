@@ -42,7 +42,7 @@ class Plot2DBenchmark : public cpplot2d::Plot2D
         void Invalidate(WindowState* windowState) override
         {
         }
-        bool SaveScreenshotAsPNG(const std::string& fileName) override
+        bool SaveScreenshot(const std::string& fileName) override
         {
             return false;
         }
