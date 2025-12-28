@@ -94,6 +94,8 @@ jobs:
         extensions: h,cpp
         repo-root: .
         thread-comments: true
+        tidy-checks: ''
         ignore: 'build|_deps|external' 
+        extra-args: '-config-file=.clang-tidy'
         
       
