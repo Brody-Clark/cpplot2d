@@ -914,6 +914,12 @@ class Plot2D
     InteractionMode m_InteractionMode = InteractionMode::NONE;
     static std::unique_ptr<IGraphicsContext> m_graphicsContext;
     std::unique_ptr<IWindow> m_window;
+
+    // State representing what to draw in the plot window
+    std::unique_ptr<WindowState> m_plotWindowState = std::make_unique<WindowState>();
+    // Separate state for mouse coordinates to avoid redrawing everything
+    std::unique_ptr<WindowState> m_coordinateViewState = std::make_unique<WindowState>();
+
     void Initialize();
     void UpdateOffsets(const std::vector<float>& x, const std::vector<float>& y);
     void OnMouseMoveCallback(IWindow& window, Point mousePos);
@@ -998,18 +1004,41 @@ class Plot2D
     static constexpr std::pair<int, int> minWindowSize = {200, 100};
     Dimension2d defaultWindowSize = {800, 600};
     PlotProperties m_plotProperties;
-    // State representing what to draw in the plot window
-    std::unique_ptr<WindowState> m_plotWindowState = std::make_unique<WindowState>();
-    // Separate state for mouse coordinates to avoid redrawing everything
-    std::unique_ptr<WindowState> m_coordinateViewState = std::make_unique<WindowState>();
 
+#ifdef CPPLOT2D_HEADLESS  // Null/Headless implementation
+    class NullWindow : public cpplot2d::Plot2D::IWindow
+    {
+       public:
+        NullWindow() = default;
+        ~NullWindow() override = default;
+        void Invalidate(WindowState* windowState) override;
+        Dimension2d GetAverageCharSize() override;
+        void InvalidateRegion(const WindowRect& rect, WindowState* windowState) override;
+        void AddMenuButtons(const std::string menu, MenuButtons menuButtons) override;
+        bool SaveScreenshot(const std::string& fileName) override;
+        void SetIsVisible(bool isVisible) override;
+        std::string GetTimestamp() override;
+        WindowRect GetRect() override;
+        void RunEventLoop() override;
+    };
+
+    class NullGraphicsContext : public cpplot2d::Plot2D::IGraphicsContext
+    {
+       public:
+        void Init() override;
+        void Shutdown() override;
+        IWindow* MakeWindow(WindowState* initialState, Dimension2d defaultSize,
+                                              Dimension2d minSize, bool isVisible,
+                                              const std::string& title) override;
+    };
+#endif
 #ifdef _WIN32  // Windows-specific implementation
     class Win32GraphicsContext : public cpplot2d::Plot2D::IGraphicsContext
     {
        public:
         void Init() override;
         void Shutdown() override;
-        cpplot2d::Plot2D::IWindow* MakeWindow(WindowState* initialState, Dimension2d defaultSize,
+        IWindow* MakeWindow(WindowState* initialState, Dimension2d defaultSize,
                                               Dimension2d minSize, bool isVisible,
                                               const std::string& title) override;
 
@@ -1223,11 +1252,15 @@ cpplot2d::Plot2D::Plot2D(std::string title, std::string xLabel, std::string yLab
 
 void cpplot2d::Plot2D::Initialize()
 {
-#ifdef _WIN32
+#ifdef CPPLOT2D_HEADLESS
+    m_graphicsContext = std::make_unique<NullGraphicsContext>();
+#elif defined(_WIN32)
     m_graphicsContext = std::make_unique<Win32GraphicsContext>();
 #elif defined(__APPLE__)
 #ifdef __OBJC__
     m_graphicsContext = std::make_unique<CocoaGraphicsContext>();
+#else
+    throw std::runtime_error("ObjC not found.")
 #endif
 #elif defined(__linux__)
     m_graphicsContext = std::make_unique<X11GraphicsContext>();
@@ -2042,15 +2075,61 @@ std::string cpplot2d::Plot2D::FileName::Create(const std::string& dir, const std
 
 #ifdef _WIN32
     std::string sep = "\\";
-#elif defined(__APPLE__)
-    std::string sep = "/"
-#elif defined(__linux__)
+#else
     std::string sep = "/";
 #endif
 
     std::string name = dir + sep + safeFilename;
     return name;
 }
+
+#ifdef CPPLOT2D_HEADLESS
+
+void cpplot2d::Plot2D::NullGraphicsContext::Init()
+{
+}
+void cpplot2d::Plot2D::NullGraphicsContext::Shutdown()
+{
+}
+cpplot2d::Plot2D::IWindow* cpplot2d::Plot2D::NullGraphicsContext::MakeWindow(
+    WindowState* initialState, Dimension2d defaultSize, Dimension2d minSize, bool isVisible,
+    const std::string& title)
+{
+    return new cpplot2d::Plot2D::NullWindow();
+}
+void cpplot2d::Plot2D::NullWindow::Invalidate(WindowState* windowState)
+{
+}
+cpplot2d::detail::Dimension2d cpplot2d::Plot2D::NullWindow::GetAverageCharSize()
+{
+    return {0, 0};
+}
+void cpplot2d::Plot2D::NullWindow::InvalidateRegion(const WindowRect& rect,
+                                                    WindowState* windowState)
+{
+}
+void cpplot2d::Plot2D::NullWindow::AddMenuButtons(const std::string menu, MenuButtons menuButtons)
+{
+}
+bool cpplot2d::Plot2D::NullWindow::SaveScreenshot(const std::string& fileName)
+{
+    return true;
+}
+void cpplot2d::Plot2D::NullWindow::SetIsVisible(bool isVisible)
+{
+}
+std::string cpplot2d::Plot2D::NullWindow::GetTimestamp()
+{
+    return "";
+}
+cpplot2d::Plot2D::WindowRect cpplot2d::Plot2D::NullWindow::GetRect()
+{
+    return WindowRect();
+}
+void cpplot2d::Plot2D::NullWindow::RunEventLoop()
+{
+}
+#endif  // CPPLOT2D_HEADLESS
 
 #ifdef _WIN32
 void cpplot2d::Plot2D::Win32Window::RunEventLoop()
