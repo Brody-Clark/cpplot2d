@@ -29,8 +29,8 @@ if (APPLE)
         "-framework CoreGraphics" 
     )
 elseif (WIN32)
-    target_link_libraries(test_plot PRIVATE cpplot2d gdi32 user32)
     add_executable(test_plot tests/integration/test_plot.cpp)
+    target_link_libraries(test_plot PRIVATE cpplot2d gdi32 user32)
 else()
     find_package(X11 REQUIRED)
     
