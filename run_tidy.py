@@ -9,89 +9,91 @@ Usage:
 import os
 import subprocess
 import sys
+import shutil
 
-# 1. Project structure relative to the script
 PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
 BUILD_DIR = os.path.join(PROJECT_ROOT, "build")
 TIDY_CONFIG = os.path.join(PROJECT_ROOT, ".clang-tidy")
+DATABASE = os.path.join(BUILD_DIR, "compile_commands.json")
 
-# 2. List of files to analyze with their specific flags
-# These targets assume you have already run `cmake -B build` to generate the
-# compile_commands.json file inside the 'build' directory.
 TIDY_TARGETS = [
     {
         "file": "clang_tidy_cpp.cpp",
-        "flags": ["-std=c++17"],
         "description": "C++ Core Logic Check"
     },
     {
         "file": "clang_tidy_objc.mm",
-        "flags": [
-            "-x", "objective-c++", 
-            "-std=c++17",
-        ],
         "description": "Objective-C++ and Framework Check"
     }
 ]
 
 def run_tidy_check(target):
-    """Executes clang-tidy for a single target."""
-    print(f"\n========================================================")
-    print(f"Running Tidy Check: {target['description']}")
-    print(f"Target File: {target['file']}")
-    print(f"========================================================")
+    # Construct the full path to the file
+    file_path = os.path.join(PROJECT_ROOT, target['file'])
+    
+    if not os.path.exists(file_path):
+        print(f"ERROR: File not found: {file_path}")
+        return 1
 
-    # Base command: use clang-tidy, tell it where the database is
+    print(f"\n{'='*60}")
+    print(f"Running Tidy Check: {target['description']}")
+    print(f"Target: {target['file']}")
+    print(f"{'='*60}")
+
+    # Build command
     command = [
         "clang-tidy",
-        os.path.join(PROJECT_ROOT, target['file']),
+        file_path,
         f"--config-file={TIDY_CONFIG}",
-        f"-p={BUILD_DIR}",  # Directs clang-tidy to the compile_commands.json
-        "--"
+        f"-header-filter=.*",
+        f"-p={BUILD_DIR}",
+        "--use-color"
     ]
     
-    # Append the specific compiler flags for this target
-    command.extend(target['flags'])
-    
-    # Execute the command
     try:
-        # Use check=True to raise an exception if clang-tidy returns a non-zero exit code
-        subprocess.run(command, check=True, text=True, capture_output=False)
-        print(f"\nSUCCESS: {target['description']} passed.")
-        return 0
-    except subprocess.CalledProcessError as e:
-        print(e.output)
-        return e.returncode
+        # Changed capture_output to False so you see real-time streaming 
+        # of clang-tidy output to terminal.
+        result = subprocess.run(command, check=False, text=True)
+        
+        if result.returncode == 0:
+            print(f"\nSUCCESS: {target['description']} passed.")
+            return 0
+        else:
+            # Clang-tidy returns non-zero if it finds warnings/errors
+            return result.returncode
+
     except FileNotFoundError:
-        print("\nERROR: clang-tidy command not found. Is it installed and in your PATH?")
+        print("\nERROR: clang-tidy not found in PATH.")
         return 1
 
 def main():
-    if not os.path.exists(BUILD_DIR):
-        print(f"Error: Build directory '{BUILD_DIR}' not found.")
-        print("Please run 'cmake -B build' first to generate 'compile_commands.json'.")
+    # Check for clang-tidy installation
+    if not shutil.which("clang-tidy"):
+        print("ERROR: clang-tidy is not installed or not in PATH.")
+        sys.exit(1)
+
+    # Check for compile_commands.json
+    if not os.path.exists(DATABASE):
+        print(f"Error: {DATABASE} not found.")
+        print("Run: cmake -B build -DCMAKE_EXPORT_COMPILE_COMMANDS=ON")
         sys.exit(1)
 
     all_passed = True
-    
-    # Run checks sequentially
     for target in TIDY_TARGETS:
-        result = run_tidy_check(target)
-        if result != 0:
+        if run_tidy_check(target) != 0:
             all_passed = False
-            # Break immediately on first failure for quick feedback
-            break 
+            # Don't break, see all errors at once
             
     if all_passed:
-        print("\n========================================================")
-        print(f"{'\033[92m'}ALL CLANG-TIDY CHECKS PASSED SUCCESSFULLY!{'\033[0m'}")
-        print("========================================================")
+        print(f"\n\033[92mALL CHECKS PASSED\033[0m")
         sys.exit(0)
     else:
-        print("\n========================================================")
-        print(f"{'\033[93m'}CLANG-TIDY CHECKS FAILED. Please review errors above.{'\033[0m'}")
-        print("========================================================")
+        print(f"\n\033[91mSOME CHECKS FAILED\033[0m")
         sys.exit(1)
 
 if __name__ == "__main__":
+    print(PROJECT_ROOT)
+    print(DATABASE)
+    print(TIDY_CONFIG)
+    print(BUILD_DIR)
     main()
