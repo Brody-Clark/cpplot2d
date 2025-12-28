@@ -94,4 +94,6 @@ jobs:
         extensions: h,cpp
         repo-root: .
         thread-comments: true
+        ignore: 'build|_deps|external' 
+        
       
