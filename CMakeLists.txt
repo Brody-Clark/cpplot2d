@@ -50,9 +50,28 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(catch2)
 
-add_executable(test_cpplot2d
-    tests/unit/test_cpplot2d.cpp
-)
+#=== Unit test executable ===
+if (APPLE)
+    add_executable(test_cpplot2d tests/unit/test_cpplot2d.cpp)
+
+    target_link_libraries(test_cpplot2d PRIVATE
+        cpplot2d
+        "-framework Cocoa"
+        "-framework CoreGraphics" 
+    )
+elseif (WIN32)
+    target_link_libraries(test_cpplot2d PRIVATE cpplot2d gdi32 user32)
+    add_executable(test_cpplot2d tests/unit/test_cpplot2d.cpp)
+else()
+    find_package(X11 REQUIRED)
+    
+    target_link_libraries(cpplot2d INTERFACE ${X11_LIBRARIES})
+    target_include_directories(cpplot2d INTERFACE ${X11_INCLUDE_DIR})
+    
+    add_executable(test_cpplot2d tests/unit/test_cpplot2d.cpp)
+    target_link_libraries(test_cpplot2d PRIVATE cpplot2d)
+endif()
+
 
 target_link_libraries(test_cpplot2d PRIVATE cpplot2d Catch2::Catch2WithMain)
 
