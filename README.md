@@ -15,7 +15,7 @@
 
 ## About
 
-**cpplot2d** is a cross-platform, header-only 2D plotting library for C++ designed for speed and simplicity. The library is:
+**cpplot2d** is a cross-platform, single header-only 2D plotting library for C++ designed for speed and simplicity. The library is:
 
 - Easy to use (a single header file to include and simple API)
 - Self-contained (no external dependencies)
