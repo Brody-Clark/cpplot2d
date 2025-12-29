@@ -81,9 +81,7 @@
         /* also send to Visual Studio Output window */                                     \
         /* small, non-portable helper */                                                   \
         /* Note: OutputDebugString expects a wide string on Unicode builds; */             \
-        /* using ANSI here for simplicity (safe in most dev scenarios). */                 \
-        /* If you need wide strings, convert fmt+args into a std::string. */               \
-        /* Keep this call optional to avoid depending on windows.h globally. */            \
+        /* using ANSI here for simplicity */                                               \
         do                                                                                 \
         {                                                                                  \
         } while (0);                                                                       \
@@ -116,7 +114,7 @@
 @class WindowDelegate;
 // NOLINTEND(readability-*, modernize-*, bugprone-*)
 #endif  // __OBJC__
-#endif  // OS check
+#endif  // _WIN32
 
 namespace cpplot2d
 {
