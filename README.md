@@ -5,7 +5,13 @@
 > 
 > Planned features (In progress): Scatter plots, plot Legends, default color themes, hotkeys, action buttons
 
-!["Demo Screenshot"](resources/cpplot2d_logotext.png)
+<p align="center">
+  <img src="resources/cpplot2d_logotext.png" alt="description" width="600">
+</p>
+
+<!-- !["Demo Screenshot"](resources/cpplot2d_logotext.png) -->
+
+<!-- # cpplot2d -->
 
 ## About
 
