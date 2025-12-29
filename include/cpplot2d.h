@@ -436,13 +436,31 @@ NSColor* NSColorFromCppColor(const cpplot2d::Color& cppColor)
     [color setStroke];
     [path stroke];
 }
+- (NSFont*)getFontWithName:(NSString*)fontName size:(int)size
+{
+    NSFont* font = nil;
+
+    // Try requested font if provided
+    if (fontName.length > 0)
+    {
+        font = [NSFont fontWithName:fontName size:size];
+    }
+
+    // Fallback to system font
+    if (!font)
+    {
+        font = [NSFont systemFontOfSize:size];
+    }
+
+    return font;
+}
 - (void)drawVerticalText:(NSString*)text
                  atPoint:(NSPoint)point
                    color:(NSColor*)color
                 fontName:(NSString*)fontName
                     size:(int)size
 {
-    NSFont* customFont = [NSFont fontWithName:fontName size:size];
+    NSFont* customFont = [self getFontWithName:fontName size:size];
     NSDictionary* attributes =
         @{NSFontAttributeName : customFont, NSForegroundColorAttributeName : color};
 
@@ -468,7 +486,7 @@ NSColor* NSColorFromCppColor(const cpplot2d::Color& cppColor)
                     fontName:(NSString*)fontName
                         size:(int)size
 {
-    NSFont* customFont = [NSFont fontWithName:fontName size:size];
+    NSFont* customFont = [self getFontWithName:fontName size:size];
     NSMutableParagraphStyle* style = [[NSMutableParagraphStyle alloc] init];
     [style setAlignment:NSTextAlignmentRight];
 
@@ -485,16 +503,18 @@ NSColor* NSColorFromCppColor(const cpplot2d::Color& cppColor)
 
     [text drawAtPoint:adjustedPoint withAttributes:attributes];
 }
+
 - (void)drawText:(NSString*)text
          atPoint:(NSPoint)point
            color:(NSColor*)color
         fontName:(NSString*)fontName
             size:(int)size
 {
-    NSFont* customFont = [NSFont fontWithName:fontName size:size];
+    if (!text) return;
+    NSFont* font  = [self getFontWithName:fontName size:size];
 
     NSDictionary* attributes =
-        @{NSFontAttributeName : customFont, NSForegroundColorAttributeName : color};
+        @{NSFontAttributeName : font, NSForegroundColorAttributeName : color};
 
     [text drawAtPoint:point withAttributes:attributes];
 }
@@ -1256,7 +1276,7 @@ void cpplot2d::Plot2D::Initialize()
 #ifdef __OBJC__
     m_graphicsContext = std::make_unique<CocoaGraphicsContext>();
 #else
-    throw std::runtime_error("ObjC not found.")
+    throw std::runtime_error("ObjC not found.");
 #endif
 #elif defined(__linux__)
     m_graphicsContext = std::make_unique<X11GraphicsContext>();

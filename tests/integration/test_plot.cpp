@@ -1,5 +1,4 @@
 #define CPPLOT2D_IMPLEMENTATION
-#define CPPLOT2D_ENABLE_DEBUG
 #include "../../include/cpplot2d.h"
 
 int main()
