@@ -161,10 +161,10 @@ struct Color
 
     /**
      Creates a Color from standard RGBA values.
-    @param red Red component (0-255)
-    @param green Green component (0-255)
-    @param blue Blue component (0-255)
-    @param alpha Alpha component (0-255), default is 255 (opaque)
+     @param red Red component (0-255)
+     @param green Green component (0-255)
+     @param blue Blue component (0-255)
+     @param alpha Alpha component (0-255), default is 255 (opaque)
     */
     static constexpr Color FromRGB(int red, int green, int blue, int alpha = 255)
     {
@@ -245,7 +245,7 @@ struct GuiText
 {
    public:
     GuiText(const std::string& text, const Point pos, const Color& color, Orientation orientation,
-            int size = 10, std::string font = "Tahoma", Alignment alignment = Alignment::LEFT)
+            int size = 10, std::string font = "", Alignment alignment = Alignment::LEFT)
         : text(text),
           pos(pos),
           color(color),
@@ -259,7 +259,7 @@ struct GuiText
     std::string text = "";
     Point pos = {-1, -1};
     int size = 10;
-    std::string font = "Tahoma";
+    std::string font = "";
     Color color = Color::White();
     Orientation orientation = Orientation::HORIZONTAL;
     Alignment alignment = Alignment::LEFT;
@@ -269,11 +269,9 @@ struct GuiText
 struct GuiRect
 {
    public:
-    GuiRect(Point topLeft, Point bottomRight,
-            /*Color fillColor,*/ Color borderColor, int borderWidth = 1)
+    GuiRect(Point topLeft, Point bottomRight, Color borderColor, int borderWidth = 1)
         : topLeft(topLeft),
           bottomRight(bottomRight),
-          /*fillColor(fillColor),*/
           borderColor(borderColor),
           borderWidth(borderWidth)
     {
@@ -281,7 +279,6 @@ struct GuiRect
     GuiRect() = default;
     Point topLeft = {-1, -1};
     Point bottomRight = {-1, -1};
-    // Color fillColor;
     Color borderColor = Color::White();
     int borderWidth = 1;
 };
@@ -718,7 +715,7 @@ class Plot2D
      @param y Vector of y-coordinates
      @param color Color of the line (default: green)
      @param size Thickness of the line (default: 1)
-    * */
+    */
     template <typename T>
     Plot2D& AddLine(const std::vector<T>& x, const std::vector<T>& y, Color color = Color::Green(),
                     int size = 1);
@@ -727,14 +724,14 @@ class Plot2D
      Show the plot with the pre-determined plot points and parameters.
      Set block to false to prevent blocking the main thread (e.g. when created from within another
      gui app).
-     */
+    */
     void Show(bool block = true);
 
     /**
      Sets whether the legend should be shown on the plot or not.
 
      @param show whether or not to show the legend
-     */
+    */
     void DisplayLegend(bool show);
 
    protected:
@@ -1026,9 +1023,8 @@ class Plot2D
        public:
         void Init() override;
         void Shutdown() override;
-        IWindow* MakeWindow(WindowState* initialState, Dimension2d defaultSize,
-                                              Dimension2d minSize, bool isVisible,
-                                              const std::string& title) override;
+        IWindow* MakeWindow(WindowState* initialState, Dimension2d defaultSize, Dimension2d minSize,
+                            bool isVisible, const std::string& title) override;
     };
 #endif
 #ifdef _WIN32  // Windows-specific implementation
@@ -1037,9 +1033,8 @@ class Plot2D
        public:
         void Init() override;
         void Shutdown() override;
-        IWindow* MakeWindow(WindowState* initialState, Dimension2d defaultSize,
-                                              Dimension2d minSize, bool isVisible,
-                                              const std::string& title) override;
+        IWindow* MakeWindow(WindowState* initialState, Dimension2d defaultSize, Dimension2d minSize,
+                            bool isVisible, const std::string& title) override;
 
        protected:
         ULONG_PTR m_gdiplusToken = 0;
@@ -1135,7 +1130,7 @@ class Plot2D
             Window win = NULL;
             int x = 0;
             int y = 0;
-            int width = 0; 
+            int width = 0;
             int height = 0;
             std::vector<DropdownMenuItem> items = {};
         };
@@ -3206,7 +3201,8 @@ cpplot2d::Plot2D::X11Window::Menu cpplot2d::Plot2D::X11Window::CreateMenu(
     int x = 4;  // Start with some padding
     Menu menu;
     menu.title = title;
-    int textWidth = XTextWidth(m_menuFont, menu.title.c_str(), static_cast<int>(menu.title.length()));
+    int textWidth =
+        XTextWidth(m_menuFont, menu.title.c_str(), static_cast<int>(menu.title.length()));
     menu.bounds = {0, x, x + textWidth + 16, m_menuBarHeight};
 
     const int itemHeight = 20;
@@ -3328,7 +3324,7 @@ void cpplot2d::Plot2D::X11Window::RunEventLoop()
                         HandleMenuClick(ev.xbutton.x, ev.xbutton.y);
                         break;
                     }
-                    
+
                     if (m_activeDropdown)
                     {
                         XUnmapWindow(m_display, m_activeDropdown->win);
@@ -3339,7 +3335,6 @@ void cpplot2d::Plot2D::X11Window::RunEventLoop()
                         OnMouseLButtonDownCallback(
                             Point(ev.xbutton.x, m_windowDimensions.second - ev.xbutton.y));
                     break;
-                  
                 }
                 else if (m_activeDropdown && (ev.xbutton.window == m_activeDropdown->win))
                 {
@@ -3434,10 +3429,10 @@ void cpplot2d::Plot2D::X11Window::HandleMenuClick(int x, int y)
                 m_activeDropdown = menu.dropdown;
                 return;
             }
-           
+
             // Open the dropdown menu
             XMoveResizeWindow(m_display, menu.dropdown->win, menu.dropdown->x, menu.dropdown->y,
-                                menu.dropdown->width, menu.dropdown->height);
+                              menu.dropdown->width, menu.dropdown->height);
             XMapWindow(m_display, menu.dropdown->win);
             XRaiseWindow(m_display, menu.dropdown->win);
             m_activeDropdown = menu.dropdown;
@@ -3604,17 +3599,17 @@ XFontStruct* cpplot2d::Plot2D::X11Window::GetFontOfSize(int size)
         m_sizeToFontCache[size] = font;
         return font;
     }
-  
+
     // Try fallback
     snprintf(fontSpec, sizeof(fontSpec), "-*-*-medium-r-normal--0-%d-100-100-p-0-iso8859-1",
-                size * 10);
+             size * 10);
     font = XLoadQueryFont(m_display, fontSpec);
     if (font)
     {
         m_sizeToFontCache[size] = font;
         return font;
     }
-    
+
     throw std::runtime_error("Failed to load font of size " + std::to_string(size));
 }
 void cpplot2d::Plot2D::X11Window::DrawWindowState(const WindowRect& rect, WindowState* windowState)
@@ -3640,7 +3635,8 @@ void cpplot2d::Plot2D::X11Window::DrawWindowState(const WindowRect& rect, Window
         }
 
         XSetForeground(m_display, m_gc, ToX11Pixel(polyline.color));
-        XDrawLines(m_display, m_backBuffer, m_gc, pts.data(), static_cast<int>(pts.size()), CoordModeOrigin);
+        XDrawLines(m_display, m_backBuffer, m_gc, pts.data(), static_cast<int>(pts.size()),
+                   CoordModeOrigin);
         pts.clear();
     }
 
@@ -3698,7 +3694,7 @@ void cpplot2d::Plot2D::X11Window::DrawWindowState(const WindowRect& rect, Window
         else
         {
             XDrawString(m_display, m_backBuffer, m_gc, posX, size.second - text.pos.second,
-                        text.text.c_str(),  static_cast<int>(text.text.length()));
+                        text.text.c_str(), static_cast<int>(text.text.length()));
         }
     }
 
@@ -3714,7 +3710,7 @@ void cpplot2d::Plot2D::X11Window::DrawTextVertical(XFontStruct* font, unsigned l
                                                    unsigned long color, int x, int y,
                                                    const char* str)
 {
-    int len =  static_cast<int>(strlen(str));
+    int len = static_cast<int>(strlen(str));
     if (len == 0) return;
 
     int width = XTextWidth(font, str, len);
@@ -3773,14 +3769,15 @@ void cpplot2d::Plot2D::X11Window::DrawMenuBar()
 
     for (auto& menu : m_menus)
     {
-        int textWidth = XTextWidth(m_menuFont, menu.title.c_str(),  static_cast<int>(menu.title.length()));
+        int textWidth =
+            XTextWidth(m_menuFont, menu.title.c_str(), static_cast<int>(menu.title.length()));
 
         menu.bounds = {0, x, x + textWidth + 16, m_menuBarHeight};
 
         // Text color
         XSetForeground(m_display, m_gc, textColor);
         XDrawString(m_display, m_backBuffer, m_gc, x + 8, 16, menu.title.c_str(),
-                     static_cast<int>(menu.title.length()));
+                    static_cast<int>(menu.title.length()));
 
         x += textWidth + 24;
     }
