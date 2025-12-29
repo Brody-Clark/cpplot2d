@@ -93,7 +93,7 @@ jobs:
         files-changed-only: false
         extensions: h,cpp
         repo-root: .
-        thread-comments: true
+        # thread-comments: true
         tidy-checks: ''
         ignore: 'build|_deps|external|tests|benchmarks'
         extra-args: '-config-file=.clang-tidy'
