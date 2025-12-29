@@ -1127,7 +1127,7 @@ class Plot2D
         };
         struct DropdownMenu
         {
-            Window win = NULL;
+            Window win = 0;
             int x = 0;
             int y = 0;
             int width = 0;
@@ -1156,7 +1156,6 @@ class Plot2D
         XFontStruct* GetFontOfSize(int size);
         uint8_t ExtractChannel(unsigned long pixel, unsigned long mask);
         bool LoadFont();
-        // Returns the window rect minus the drawn top menu bar
         WindowRect GetContentRect();
 
        private:
@@ -1168,12 +1167,12 @@ class Plot2D
         std::vector<void*> m_menuCallbacks;
         DropdownMenu* m_activeDropdown = nullptr;
         XFontStruct* m_menuFont = nullptr;
-        Pixmap m_backBuffer = NULL;
+        Pixmap m_backBuffer = 0;
         Display* m_display = nullptr;
         ::Window m_window;
         int m_screen;
-        GC m_gc;          // graphics context
-        Atom m_wmDelete;  // window close atom
+        GC m_gc;
+        Atom m_wmDelete;
         bool m_running = false;
         std::unordered_map<uint32_t, unsigned long> m_colorCache;
         std::unordered_map<int, XFontStruct*> m_sizeToFontCache;
