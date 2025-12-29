@@ -31,7 +31,7 @@
 
 ### Windows/Linux
 
-Simply copy the header file from `include/cpplot2d.h` and include it in your project and define the macro `CPPLOT2D_IMPLEMENTATION` **once** before the inlcude statement. Only in **one** C++ source file (`.cpp` or `.cxx`), you must define the implementation macro before including the header. This generates the function definitions.
+Simply copy the header file from `include/cpplot2d.h` or [download the latest release here](https://github.com/Brody-Clark/cpplot2d/releases/latest/download/cpplot2d.h), and include it in your project and define the macro `CPPLOT2D_IMPLEMENTATION` **once** before the inlcude statement. Only in **one** C++ source file (`.cpp` or `.cxx`), you must define the implementation macro before including the header. This generates the function definitions.
 
 ```cpp
 #define CPPLOT2D_IMPLEMENTATION  // In ONE file only (e.g., main.cpp or cpplot2d_impl.cpp)
