@@ -95,7 +95,7 @@ jobs:
         repo-root: .
         thread-comments: true
         tidy-checks: ''
-        ignore: '^(?!(clang_tidy_cpp\.cpp|clang_tidy_objc\.mm)$)'
+        ignore: 'build|_deps|external|tests|benchmarks'
         extra-args: '-config-file=.clang-tidy'
         
       
