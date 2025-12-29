@@ -1,15 +1,3 @@
-```
-                                 ░██               ░██     ░██████         ░██
-                                 ░██               ░██    ░██   ░██        ░██
-░███████  ░████████  ░████████   ░██  ░███████  ░████████       ░██  ░████████
-░██    ░██ ░██    ░██ ░██    ░██ ░██ ░██    ░██    ░██      ░█████  ░██    ░██
-░██        ░██    ░██ ░██    ░██ ░██ ░██    ░██    ░██     ░██      ░██    ░██
-░██    ░██ ░███   ░██ ░███   ░██ ░██ ░██    ░██    ░██    ░██       ░██   ░███
-░███████  ░██░█████  ░██░█████   ░██  ░███████      ░████ ░████████  ░█████░██
-          ░██        ░██                                            
-          ░██        ░██                                         
-```
-
 > [!IMPORTANT]
 > **Project Status: In Progress**
 >
@@ -17,7 +5,7 @@
 > 
 > Planned features (In progress): Scatter plots, plot Legends, default color themes, hotkeys, action buttons
 
-!["Demo Screenshot"](docs/PlotDemo.png)
+!["Demo Screenshot"](resources/cpplot2d_logotext.png)
 
 ## About
 
