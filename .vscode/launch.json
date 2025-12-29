@@ -2,7 +2,7 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "C++ Debug (macOS/LLDB)",
+            "name": "C++ Debug Test Plot(macOS/LLDB)",
             "type": "lldb-dap",
             "request": "launch",
             "program": "${workspaceFolder}/build/test_plot_mac",
@@ -11,10 +11,19 @@
             "preLaunchTask": "CMake: build",
         },
         {
-            "name": "C++ Debug (Windows/Linux)",
+            "name": "C++ Debug Test Plot(Windows/Linux)",
             "type": "cppdbg",
             "request": "launch",
             "program": "${workspaceFolder}/build/test_plot",
+            "args": [],
+            "cwd": "${workspaceFolder}",
+            "preLaunchTask": "CMake: build",
+        },
+        {
+            "name": "C++ Debug Unit Tests",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/build/test_cpplot2d",
             "args": [],
             "cwd": "${workspaceFolder}",
             "preLaunchTask": "CMake: build",

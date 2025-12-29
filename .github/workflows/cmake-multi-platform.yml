@@ -9,7 +9,9 @@ on:
 jobs:
   build:
     runs-on: ${{ matrix.os }}
-
+    permissions:
+      contents: read
+      pull-requests: read
     strategy:
       # Set fail-fast to false to ensure that feedback is delivered for all matrix combinations. Consider changing this to true when your workflow is stable.
       fail-fast: false
@@ -49,7 +51,7 @@ jobs:
       if: runner.os == 'Linux'
       run: |
         sudo apt-get update
-        sudo apt-get install -y libx11-dev
+        sudo apt-get install -y libx11-dev xvfb
         
     - name: Set reusable strings
       # Turn repeated input strings (such as the build output directory) into step outputs. These step outputs can be used throughout the workflow file.
@@ -74,12 +76,25 @@ jobs:
     - name: Test
       working-directory: ${{ steps.strings.outputs.build-output-dir }}
       # Execute tests defined by the CMake configuration. Note that --build-config is needed because the default Windows generator is a multi-config generator (Visual Studio generator).
-      run: ctest --build-config ${{ matrix.build_type }}
+      run: ctest --build-config ${{ matrix.build_type }} --output-on-failure
+
+    - name: Show LastTest.log on failure
+      if: failure()
+      run: |
+        echo "===== LastTest.log ====="
+        cat ${{ steps.strings.outputs.build-output-dir }}/Testing/Temporary/LastTest.log || echo "No LastTest.log found"
+
 
     - name: C/C++ Linter
       uses: cpp-linter/cpp-linter-action@v2
       with:
         style: 'file'
         database: ${{ steps.strings.outputs.build-output-dir }}
-        thread-comments: true
+        files-changed-only: false
+        extensions: h,cpp
+        repo-root: .
+        tidy-checks: ''
+        ignore: 'build|_deps|external|tests|benchmarks'
+        extra-args: '-config-file=.clang-tidy'
+        
       
