@@ -40,9 +40,9 @@
 #pragma once
 
 #define CPPLOT2D_VERSION_MAJOR 1
-#define CPPLOT2D_VERSION_MINOR 0
+#define CPPLOT2D_VERSION_MINOR 1
 #define CPPLOT2D_VERSION_PATCH 0
-#define CPPLOT2D_VERSION  "1.0.0-dev"
+#define CPPLOT2D_VERSION  "1.1.0-dev"
 
 #include <algorithm>
 #include <cassert>
