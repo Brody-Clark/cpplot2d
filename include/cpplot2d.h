@@ -39,6 +39,11 @@
  **********************************************************************************************/
 #pragma once
 
+#define CPPLOT2D_VERSION_MAJOR 1
+#define CPPLOT2D_VERSION_MINOR 0
+#define CPPLOT2D_VERSION_PATCH 0
+#define CPPLOT2D_VERSION  "1.0.0"
+
 #include <algorithm>
 #include <cassert>
 #include <chrono>
@@ -64,9 +69,8 @@
 #ifdef _WIN32
 #include <windows.h>
 #endif
-// Enable by defining CPPLOT2D_ENABLE_DEBUG (in CMake or project preprocessor defs)
-#ifdef CPPLOT2D_ENABLE_DEBUG
 
+#ifdef CPPLOT2D_ENABLE_DEBUG
 // Print to stderr and, on Windows, send to the debugger output.
 #define CPPLOT2D_DEBUG(fmt, ...)                                                           \
     do                                                                                     \
@@ -84,12 +88,9 @@
         {                                                                                  \
         } while (0);                                                                       \
     } while (0)
-
 #else
-
 // No-op in release builds
 #define CPPLOT2D_DEBUG(fmt, ...) ((void)0)
-
 #endif
 
 #ifdef _WIN32
