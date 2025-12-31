@@ -68,6 +68,14 @@ class Plot2DBenchmark : public cpplot2d::Plot2D
         std::function<void()> OnResizeEndCallback;
         std::function<void()> OnResizeCallback;
 
+        protected:
+        void Draw(const GuiRect& rect) override{}
+        void Draw(const GuiLine& line) override{}
+        void Draw(const GuiCircle& circle) override{}
+        void Draw(const GuiText& text) override{}
+        void Draw(const GuiPolyline& polyline) override{}
+        void Draw(const GuiPointCloud& pointcloud) override{}
+
        private:
         int m_width;
         int m_height;
