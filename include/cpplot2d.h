@@ -1509,11 +1509,11 @@ void cpplot2d::Plot2D::UpdateOffsets(const std::vector<float>& x, const std::vec
 
     m_viewZero = m_plotZeroOffsets;
     const float plotPaddingScale = 1.05;
-    m_viewSpan.first = m_dataSpans.first > 0.0f ? m_dataSpans.first * plotPaddingScale : 1.0f;
-    m_viewSpan.second = m_dataSpans.second > 0.0f ? m_dataSpans.second * plotPaddingScale : 1.0f;
+    m_viewSpan.first = m_dataSpans.first > 0.0f ? m_dataSpans.first * plotPaddingScale: 1.0f;
+    m_viewSpan.second = m_dataSpans.second > 0.0f ? m_dataSpans.second * plotPaddingScale: 1.0f;
 
     m_defaultViewZero = m_viewZero;
-    m_defaultViewSpan.first = m_viewSpan.first;
+    m_defaultViewSpan = m_viewSpan;
 
     // Calculate scale factors for coordinate transformations (only needs to be recalculated on
     // resize)
@@ -1695,7 +1695,7 @@ void cpplot2d::Plot2D::DrawBasePlot(WindowState* windowState, IWindow* window)
                          {leftBorderPos + m_tickLength, topBorderPos}, textColor),
                  ZOrder::Z_AXES));
     label.str("");
-    label << std::setprecision(3) << offset;
+    label << std::setprecision(3) <<  offset + increment;
     windowState->items.emplace_back(
         DrawItem(GuiText(label.str(),
                          Point({std::max(10, int(leftBorderPos - charSize.first - m_tickLength)),
@@ -2171,9 +2171,6 @@ void cpplot2d::Plot2D::Zoom(WindowRect zoomRect, IWindow& w)
 {
     // Set plot view to match rectangle
     Dimension2d windowSize = w.GetRect().Size();
-    const Pointf windowToViewportScales = m_windowToViewportScaleFactors;
-    const Pointf viewportToWindowScales = m_viewportToWindowScaleFactors;
-    UpdateViewportWindowScaleFactors(windowSize);
     const Pointf scales = m_viewportToWindowScaleFactors;
 
     m_viewZero.first =
@@ -2242,18 +2239,16 @@ void cpplot2d::Plot2D::OnToggleGrabClicked(IWindow& w)
 void cpplot2d::Plot2D::OnResetViewClicked(IWindow& w)
 {
     // Temporarily disable mouse hover to avoid blanking during next update
-    m_window->OnMouseMoveCallback = nullptr;
+    w.OnMouseMoveCallback = nullptr;
 
     // Restore saved defaults
     m_viewZero = m_defaultViewZero;
-    m_viewSpan.first = m_defaultViewSpan.first;
-    m_viewSpan.second = m_defaultViewSpan.second;
-    UpdateViewportWindowScaleFactors(w.GetRect().Size());
-    UpdatePlotWindowState(m_plotWindowState.get(), m_window.get());
+    m_viewSpan = m_defaultViewSpan;
+    UpdatePlotWindowState(m_plotWindowState.get(), &w);
     w.Invalidate(m_plotWindowState.get());
 
     // Re-enable mouse hover
-    m_window->OnMouseMoveCallback = [this](Point p) { this->OnMouseMoveCallback(*m_window, p); };
+    w.OnMouseMoveCallback = [this, &w](Point p) { this->OnMouseMoveCallback(w, p); };
 }
 std::string cpplot2d::Plot2D::FileName::Create(const std::string& dir, const std::string& filename)
 {
