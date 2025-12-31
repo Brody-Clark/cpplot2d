@@ -11,7 +11,7 @@ class Plot2DBenchmark : public cpplot2d::Plot2D
         : cpplot2d::Plot2D()
         {
         }
-        void TestDrawLinePlot(WindowState* state, const std::vector<float>& x,
+        void TestDrawLinePlot(DrawCommand* state, const std::vector<float>& x,
                                                 const std::vector<float>& y,
                                                 int top, int left, int bottom, int right)
         {
@@ -31,13 +31,13 @@ class Plot2DBenchmark : public cpplot2d::Plot2D
         {
             return {5, 5};
         }
-        void InvalidateRegion(const WindowRect& rect, WindowState* windowState) override
+        void InvalidateRegion(const WindowRect& rect) override
         {
         }
         void AddMenuButtons(const std::string menu, MenuButtons menuButtons) override
         {
         }
-        void Invalidate(WindowState* windowState) override
+        void Invalidate() override
         {
         }
         bool SaveScreenshot(const std::string& fileName) override
@@ -59,6 +59,10 @@ class Plot2DBenchmark : public cpplot2d::Plot2D
         {
         }
         void ProcessEvents() override 
+        {
+
+        }
+        void Draw(const DrawCommand& state) override
         {
 
         }
@@ -94,14 +98,14 @@ static void BM_GetDataPolyline(benchmark::State& state)
         ys[i] = static_cast<float>(i % 100);
     }
 
-    cpplot2d::detail::WindowState windowState;
+    cpplot2d::detail::DrawCommand drawCommand;
     // Construct Plot
     Plot2DBenchmark plot(xs, ys, "benchmark_plot");
     Plot2DBenchmark::MockWindow mockWindow(800, 600);
     cpplot2d::detail::GuiPolyline line;
     for (auto _ : state)
     {
-        plot.TestDrawLinePlot(&windowState, xs, ys, 600, 20, 20, 400);
+        plot.TestDrawLinePlot(&drawCommand, xs, ys, 600, 20, 20, 400);
         //benchmark::DoNotOptimize(poly);
     }
 }
