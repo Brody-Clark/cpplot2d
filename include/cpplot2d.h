@@ -1954,25 +1954,6 @@ void cpplot2d::Plot2D::UpdatePlotDrawCommand(cpplot2d::Plot2D::DrawCommand* Draw
                      [](const DrawItem& a, const DrawItem& b) { return a.z < b.z; });
 }
 
-// inline void cpplot2d::Plot2D::UpdateViewportWindowScaleFactors(const Dimension2d& windowSize)
-// {
-//     Pointf viewportToWindow = GetViewportToWindowScaleFactor(windowSize);
-//     m_viewportToWindowScaleFactors = viewportToWindow;
-//     m_windowToViewportScaleFactors = {1 / viewportToWindow.first, 1 / viewportToWindow.second};
-// }
-
-// inline cpplot2d::detail::Pointf cpplot2d::Plot2D::GetViewportToWindowScaleFactor(
-//     const Dimension2d& windowSize)
-// {
-//     const float xPlotSpan = static_cast<float>(windowSize.first - 2 * m_viewportRect.left);
-//     const float yPlotSpan = static_cast<float>(windowSize.second - 2 * m_viewportRect.bottom);
-
-//     const float viewSpanX = (m_viewSpan.first > 0.0f) ? m_viewSpan.first : 1.0f;
-//     const float viewSpanY = (m_viewSpan.second > 0.0f) ? m_viewSpan.second : 1.0f;
-
-//     return {viewSpanX / xPlotSpan, viewSpanY / yPlotSpan};
-// }
-
 inline bool cpplot2d::Plot2D::DoPointsIntersectRect(const Point& p1, const Point& p2,
                                                     const WindowRect& rect)
 {
