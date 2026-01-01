@@ -1095,13 +1095,7 @@ class Plot2D
                    Color color = Color::Green(), int size = 1);
     void DoAddScatter(const std::vector<float>& xf, const std::vector<float>& yf, Color color,
                       int radius);
-    WindowRectf PadRect(const WindowRectf& r, float padFrac)
-    {
-        float dx = r.Width() * padFrac;
-        float dy = r.Height() * padFrac;
-
-        return WindowRectf(r.top + dy, r.left - dx, r.right + dx, r.bottom - dy);
-    }
+    WindowRectf PadRect(const WindowRectf& r, float padFrac);
     void UpdateDataBounds(const std::vector<float>& x, const std::vector<float>& y);
     void OnMouseMoveCallback(IWindow& window, Point mousePos);
     void OnMouseLButtonDownCallback(IWindow& window, Point mousePos);
@@ -1161,7 +1155,6 @@ class Plot2D
     std::string m_yLabel = "";
     std::string title = "";
     Dimension2d m_mouseCoordinateRectOffset = {200, 15};
-    std::pair<float, float> m_dataSpans = {0.0f, 0.0f};
     static constexpr int m_tickLength = 4;
     Dimension2d m_defaultWindowSize = {800, 600};
     PlotProperties m_plotProperties;
@@ -1598,7 +1591,13 @@ cpplot2d::Plot2D& cpplot2d::Plot2D::AddLine(const std::vector<std::pair<T, T>>& 
 void cpplot2d::Plot2D::DoAddScatter(const std::vector<float>& xf, const std::vector<float>& yf,
                                     Color color, int radius)
 {
-    m_dataSeries.points.emplace_back(ScatterSeries(xf, yf, color, radius * 4));
+    // Sort the data ahead of time since the update loop will cull duplicates
+    ScatterSeries series(xf, yf, color, radius * 4);
+    std::sort(series.transformedPoints.begin(), series.transformedPoints.end(),
+        [](const Point& a, const Point& b) {
+            return a.first < b.first || (a.first == b.first && a.first < b.first);
+        });
+    m_dataSeries.points.emplace_back(series);
 
     UpdateDataBounds(xf, yf);
 }
@@ -1638,7 +1637,13 @@ cpplot2d::Plot2D& cpplot2d::Plot2D::AddPoints(const std::vector<std::pair<T, T>>
     DoAddScatter(xf, yf, color, radius);
     return *this;
 }
+inline cpplot2d::Plot2D::WindowRectf cpplot2d::Plot2D::PadRect(const WindowRectf& r, float padFrac)
+{
+    float dx = r.Width() * padFrac;
+    float dy = r.Height() * padFrac;
 
+    return WindowRectf(r.top + dy, r.left - dx, r.right + dx, r.bottom - dy);
+}
 void cpplot2d::Plot2D::DrawBasePlot(DrawCommand* DrawCommand, IWindow* window)
 {
     WindowRect viewport = m_viewportRect;
@@ -1919,6 +1924,14 @@ inline void cpplot2d::Plot2D::DrawScatterPlot(DrawCommand* DrawCommand,
         }
     }
 
+    // Remove duplicates - big performance boost for very large/dense datasets
+    auto it = std::unique(series.transformedPoints.begin(), series.transformedPoints.end(),
+                        [](const Point& a, const Point& b) {
+                            return a.first == b.first && a.second == b.second;
+                        });
+
+    series.transformedPoints.erase(it, series.transformedPoints.end());
+
     auto& item = DrawCommand->items.emplace_back();
     item.payload.emplace<GuiPointCloud>(series.transformedPoints, series.color, series.pointSize);
     item.z = ZOrder::Z_DATA;
@@ -2164,6 +2177,7 @@ void cpplot2d::Plot2D::HandleMouseHover(IWindow& w, Point mousePos)
         m_plotDirty = true;
         // Invalidate whole plot window to clear mouse coordinate text
         // and make sure any overlapped elements are redrawn
+        // TODO: remove this when overlay/action bar is implemented
         w.Invalidate();
     }
 }
@@ -4094,11 +4108,12 @@ void cpplot2d::Plot2D::X11Window::Draw(const GuiPointCloud& pointcloud)
 {
     Dimension2d size = m_windowDimensions;
     XSetForeground(m_display, m_gc, ToX11Pixel(pointcloud.color));
+    int angle = 360 * 64;
+    int d = pointcloud.radius * 2;
     for (auto& p : pointcloud.points)
     {
-        int d = pointcloud.radius * 2;
         XFillArc(m_display, m_backBuffer, m_gc, p.first - pointcloud.radius,
-                 size.second - (p.second + pointcloud.radius), d, d, 0, 360 * 64);
+                 size.second - (p.second + pointcloud.radius), d, d, 0, angle);
     }
 }
 void cpplot2d::Plot2D::X11Window::ApplyClip(const ClipRect& clip)
