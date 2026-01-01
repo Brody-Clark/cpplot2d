@@ -1243,7 +1243,7 @@ class Plot2D
         bool m_drawnOnce = false;
         std::map<Color, HPEN> m_pens;
         std::map<Color, HBRUSH> m_brushes;
-        void DrawDrawCommand(const RECT& clientRect, const RECT& invalidatedRect);
+        void DrawWindow(const RECT& clientRect, const RECT& invalidatedRect);
         LRESULT HandleMessage(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
         void SaveHBITMAPToFile(HBITMAP hBitmap, const std::string& filename);
         HBITMAP CaptureWindowContent(HWND hwnd);
@@ -1334,7 +1334,7 @@ class Plot2D
         void Draw(const GuiPolyline& polyline) override;
         void Draw(const GuiPointCloud& pointcloud) override;
         Menu CreateMenu(const std::string& title, const MenuButtons& menuButtons);
-        void DrawDrawCommand(const WindowRect& rect, DrawCommand* DrawCommand);
+        void DrawWindow();
         void DrawMenuBar();
         void DrawTextVertical(XFontStruct* font, unsigned long background, unsigned long color,
                               int x, int y, const char* str);
@@ -1352,12 +1352,13 @@ class Plot2D
         std::vector<Menu> m_menus;
         Color m_menuColor = Color(220, 220, 220);
         Dimension2d m_windowDimensions;
+        WindowRect m_invalidatedRect;
         const int m_menuBarHeight = 24;
-        DrawCommand* m_DrawCommand = nullptr;
         std::vector<void*> m_menuCallbacks;
         DropdownMenu* m_activeDropdown = nullptr;
         XFontStruct* m_menuFont = nullptr;
         Pixmap m_backBuffer = 0;
+        unsigned long m_backgroundColor;
         Display* m_display = nullptr;
         ::Window m_window;
         int m_screen;
@@ -3501,7 +3502,7 @@ void cpplot2d::Plot2D::X11GraphicsContext::Shutdown()
 cpplot2d::Plot2D::IWindow* cpplot2d::Plot2D::X11GraphicsContext::MakeWindow(
     Color color, Dimension2d defaultSize, bool isVisible, const std::string& title)
 {
-    return new X11Window(defaultSize, Dimension2d(0, 0), title, initialState);
+    return new X11Window(defaultSize, Dimension2d(0, 0), title, color);
 }
 
 cpplot2d::Plot2D::X11Window::X11Window(Dimension2d m_defaultWindowSize, Dimension2d pos,
@@ -3518,10 +3519,12 @@ cpplot2d::Plot2D::X11Window::X11Window(Dimension2d m_defaultWindowSize, Dimensio
         XCreateSimpleWindow(m_display, root, pos.first, pos.second, m_defaultWindowSize.first,
                             m_defaultWindowSize.second, 1, ToX11Pixel(color), ToX11Pixel(color));
 
+    m_backgroundColor = ToX11Pixel(color);
+
     XSetWindowAttributes attrs;
     // Pin the current contents to the top-left (0,0) during resize
     attrs.bit_gravity = StaticGravity;
-    attrs.background_pixel = ToX11Pixel(color);
+    attrs.background_pixel = m_backgroundColor;
     XChangeWindowAttributes(m_display, m_window, CWBackPixel | CWBitGravity, &attrs);
     XSelectInput(m_display, m_window,
                  ExposureMask | KeyPressMask | KeyReleaseMask | ButtonPressMask |
@@ -3648,12 +3651,10 @@ void cpplot2d::Plot2D::X11Window::SetIsVisible(bool isVisible)
 
     XFlush(m_display);
 }
-void cpplot2d::Plot2D::X11Window::Invalidate(DrawCommand* DrawCommand)
+void cpplot2d::Plot2D::X11Window::Invalidate()
 {
-    m_DrawCommand = DrawCommand;
-
-    DrawDrawCommand(WindowRect(m_windowDimensions.second, 0, m_windowDimensions.first, 0),
-                    DrawCommand);
+    m_invalidatedRect = GetRect();
+    DrawWindow();
 }
 std::string cpplot2d::Plot2D::X11Window::GetTimestamp()
 {
@@ -3719,10 +3720,10 @@ void cpplot2d::Plot2D::X11Window::HandleMenuClick(int x, int y)
         m_activeDropdown = nullptr;
     }
 }
-void cpplot2d::Plot2D::X11Window::InvalidateRegion(const WindowRect& rect, DrawCommand* DrawCommand)
+void cpplot2d::Plot2D::X11Window::InvalidateRegion(const WindowRect& rect)
 {
-    m_DrawCommand = DrawCommand;
-    DrawDrawCommand(rect, DrawCommand);
+    m_invalidatedRect = rect;
+    DrawWindow();
 }
 bool cpplot2d::Plot2D::X11Window::BrowseForFolder(std::string& outFolder)
 {
@@ -3792,7 +3793,7 @@ bool cpplot2d::Plot2D::X11Window::SaveScreenshot(const std::string& fileName)
         return true;
     }
     // Force redraw to clear dropdown
-    Invalidate(m_DrawCommand);
+    Invalidate();
 
     // Create image
     WindowRect rect = GetContentRect();
@@ -3867,7 +3868,7 @@ inline void cpplot2d::Plot2D::X11Window::HandleEvent(XEvent ev)
             }
             else if (ev.xexpose.window == m_window && ev.xexpose.count == 0)
             {
-                if (m_DrawCommand) Invalidate(m_DrawCommand);
+                Invalidate();
             }
             break;
 
@@ -4055,7 +4056,7 @@ void cpplot2d::Plot2D::X11Window::Draw(const GuiText& text)
 
     if (text.orientation == Orientation::VERTICAL)
     {
-        DrawTextVertical(font, ToX11Pixel(m_DrawCommand->background), ToX11Pixel(text.color), posX,
+        DrawTextVertical(font, m_backgroundColor, ToX11Pixel(text.color), posX,
                          size.second - text.pos.second, text.text.c_str());
     }
     else
@@ -4102,19 +4103,24 @@ void cpplot2d::Plot2D::X11Window::RestoreClip(const ClipRect* clip)
 {
     XSetClipMask(m_display, m_gc, None);
 }
-void cpplot2d::Plot2D::X11Window::DrawDrawCommand(const WindowRect& rect, DrawCommand* DrawCommand)
+void cpplot2d::Plot2D::X11Window::DrawWindow()
+{
+   if(OnDrawCallback)
+    OnDrawCallback();
+}
+void cpplot2d::Plot2D::X11Window::Draw(const DrawCommand& state) 
 {
     Dimension2d size = m_windowDimensions;
-    unsigned long backgroundColor = ToX11Pixel(DrawCommand->background);
+    unsigned long backgroundColor = ToX11Pixel(state.background);
     // Fill background
     XSetForeground(m_display, m_gc, backgroundColor);
-
+    WindowRect rect = m_invalidatedRect;
     XFillRectangle(m_display, m_backBuffer, m_gc, rect.left, size.second - rect.top,
                    rect.right - rect.left, rect.top - rect.bottom);
 
     // Draw items
     ClipStack clipStack(*this);
-    for (const DrawItem& item : DrawCommand->items)
+    for (const DrawItem& item : state.items)
     {
         if (item.clip.isEnabled)
         {
