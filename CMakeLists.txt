@@ -36,10 +36,11 @@ if (APPLE)
         cpplot2d
         "-framework Cocoa"
         "-framework CoreGraphics" 
+        Catch2::Catch2WithMain
     )
 elseif (WIN32)
     add_executable(test_plot tests/integration/test_plot.cpp)
-    target_link_libraries(test_plot PRIVATE cpplot2d gdi32 user32)
+    target_link_libraries(test_plot PRIVATE cpplot2d gdi32 user32 Catch2::Catch2WithMain)
 else()
     find_package(X11 REQUIRED)
     
@@ -47,10 +48,8 @@ else()
     target_include_directories(cpplot2d INTERFACE ${X11_INCLUDE_DIR})
     
     add_executable(test_plot tests/integration/test_plot.cpp)
-    target_link_libraries(test_plot PRIVATE cpplot2d)
+    target_link_libraries(test_plot PRIVATE cpplot2d Catch2::Catch2WithMain)
 endif()
-
-target_link_libraries(test_plot PRIVATE cpplot2d Catch2::Catch2WithMain)
 
 
 #=== Unit test executable ===

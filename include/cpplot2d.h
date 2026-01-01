@@ -247,7 +247,7 @@ struct GuiPolyline
         : points(points), color(c), thickness(thickness)
     {
     }
-    std::vector<Point> points;
+    std::vector<Point> points = {};
     Color color;
     int thickness;
 };
@@ -388,14 +388,14 @@ struct DrawItem
     }
     ZOrder z;
     ClipRect clip;
-    DrawPayload payload;
+    DrawPayload payload = {};
 };
 
-// Represents the entire state of the window to be drawn
+// Represents a series of draw items to be executed in the window
 struct DrawCommand
 {
     Color background = Color::Black();
-    std::vector<DrawItem> items;
+    std::vector<DrawItem> items = {};
 };
 
 }  // namespace detail
@@ -407,6 +407,7 @@ struct DrawCommand
 // Typedefs in the global namespace
 typedef cpplot2d::detail::GuiLine GuiLine;
 typedef cpplot2d::detail::GuiPolyline GuiPolyline;
+typedef cpplot2d::detail::GuiPointCloud GuiPointCloud;
 typedef cpplot2d::detail::GuiCircle GuiCircle;
 typedef cpplot2d::detail::GuiText GuiText;
 typedef cpplot2d::detail::GuiRect GuiRect;
@@ -415,6 +416,8 @@ typedef cpplot2d::detail::DrawCommand DrawCommand;
 @interface WindowView : NSView
 @property(nonatomic, assign) DrawCommand* DrawCommand;
 @property(nonatomic, strong) NSTrackingArea* trackingArea;
+@property(nonatomic, assign) std::function<void()>* drawCallback;
+@property(nonatomic, assign) std::map<cpplot2d::Color, NSColor*>* colorMap;
 @end
 extern NSString* const MouseMovedNotification = @"MouseMovedNotification";
 
@@ -478,31 +481,12 @@ extern NSString* const MouseMovedNotification = @"MouseMovedNotification";
     // Call updateTrackingAreas to ensure tracking is set up once the window is present
     [self updateTrackingAreas];
 }
-NSColor* NSColorFromCppColor(const cpplot2d::Color& cppColor)
+- (void)drawGuiRect:(const cpplot2d::detail::GuiRect&)rect color:(NSColor*)color
 {
-    // Perform the scaling conversion for each component
-    CGFloat red = (CGFloat)cppColor.r / 255.0f;
-    CGFloat green = (CGFloat)cppColor.g / 255.0f;
-    CGFloat blue = (CGFloat)cppColor.b / 255.0f;
-    CGFloat alpha = (CGFloat)cppColor.a / 255.0f;
-
-    // Use the AppKit NSColor initializer
-    return [NSColor colorWithRed:red green:green blue:blue alpha:alpha];
-}
-- (void)drawCircleAt:(NSPoint)center radius:(CGFloat)radius color:(NSColor*)color
-{
-    NSRect circleRect = NSMakeRect(center.x - radius, center.y - radius, radius * 2, radius * 2);
-    NSBezierPath* circlePath = [NSBezierPath bezierPathWithOvalInRect:circleRect];
-
-    [color setFill];
-    [circlePath fill];
-}
-- (void)drawRectWithTopLeft:(NSPoint)topLeft bottomRight:(NSPoint)bottomRight color:(NSColor*)color
-{
-    NSRect rect =
-        NSMakeRect(topLeft.x, bottomRight.y, bottomRight.x - topLeft.x, topLeft.y - bottomRight.y);
-
-    NSBezierPath* path = [NSBezierPath bezierPathWithRect:rect];
+    NSRect nsRect = NSMakeRect(rect.topLeft.first, rect.bottomRight.second,
+                               rect.bottomRight.first - rect.topLeft.first,
+                               rect.topLeft.second - rect.bottomRight.second);
+    NSBezierPath* path = [NSBezierPath bezierPathWithRect:nsRect];
 
     [color setStroke];
     [path stroke];
@@ -574,7 +558,49 @@ NSColor* NSColorFromCppColor(const cpplot2d::Color& cppColor)
 
     [text drawAtPoint:adjustedPoint withAttributes:attributes];
 }
+- (void)drawGuiText:(const cpplot2d::detail::GuiText&)text color:(NSColor*)color
+{
+    if (text.orientation == cpplot2d::detail::Orientation::HORIZONTAL)
+    {
+        if (text.alignment == cpplot2d::detail::Alignment::LEFT)
+        {
+            [self drawText:[NSString stringWithUTF8String:text.text.c_str()]
+                   atPoint:NSMakePoint(text.pos.first, text.pos.second)
+                     color:color
+                  fontName:[NSString stringWithUTF8String:text.font.c_str()]
+                      size:text.size];
+        }
+        else
+        {
+            [self drawRightAlignedText:[NSString stringWithUTF8String:text.text.c_str()]
+                               atPoint:NSMakePoint(text.pos.first, text.pos.second)
+                                 color:color
+                              fontName:[NSString stringWithUTF8String:text.font.c_str()]
+                                  size:text.size];
+        }
+    }
+    else if (text.orientation == cpplot2d::detail::Orientation::VERTICAL)
+    {
+        [self drawVerticalText:[NSString stringWithUTF8String:text.text.c_str()]
+                       atPoint:NSMakePoint(text.pos.first, text.pos.second)
+                         color:color
+                      fontName:[NSString stringWithUTF8String:text.font.c_str()]
+                          size:text.size];
+    }
+}
+- (void)drawGuiLine:(const GuiLine&)line color:(NSColor*)color
+{
+    NSPoint start = NSMakePoint(line.p1.first, line.p1.second);
+    NSPoint end = NSMakePoint(line.p2.first, line.p2.second);
 
+    [color setStroke];
+
+    NSBezierPath* path = [NSBezierPath bezierPath];
+    [path moveToPoint:start];
+    [path lineToPoint:end];
+
+    [path stroke];
+}
 - (void)drawText:(NSString*)text
          atPoint:(NSPoint)point
            color:(NSColor*)color
@@ -589,117 +615,60 @@ NSColor* NSColorFromCppColor(const cpplot2d::Color& cppColor)
 
     [text drawAtPoint:point withAttributes:attributes];
 }
-- (void)drawPolyline:(NSArray<NSValue*>*)points color:(NSColor*)color
+- (void)drawGuiPolyline:(const cpplot2d::detail::GuiPolyline&)polyline color:(NSColor*)color
 {
-    if (points.count < 2) return;  // Need at least two points to draw a line
+    if (polyline.points.size() < 2) return;  // Need at least two points to draw a line
 
     NSBezierPath* path = [NSBezierPath bezierPath];
-    [path moveToPoint:points[0].pointValue];  // Start at the first point
+    [path moveToPoint:NSMakePoint(polyline.points[0].first,
+                                  polyline.points[0].second)];  // Start at the first point
 
-    for (int i = 1; i < points.count; i++)
+    for (int i = 1; i < polyline.points.size(); i++)
     {
-        [path lineToPoint:points[i].pointValue];  // Connect to the next point
+        [path lineToPoint:NSMakePoint(polyline.points[i].first,
+                                      polyline.points[i].second)];  // Connect to the next point
     }
 
     [color setStroke];
     [path setLineWidth:2.0];
     [path stroke];
 }
-- (void)drawLineFrom:(NSPoint)start to:(NSPoint)end color:(NSColor*)color
+- (void)drawGuiPointCloud:(const cpplot2d::detail::GuiPointCloud&)pointcloud color:(NSColor*)color
 {
-    // Set the stroke color
-    [[NSColor whiteColor] setStroke];
+    for (const cpplot2d::detail::Point& p : pointcloud.points)
+    {
+        NSBezierPath* path = [NSBezierPath bezierPath];
+        [path appendBezierPathWithOvalInRect:NSMakeRect(p.first - pointcloud.radius,
+                                                        p.second - pointcloud.radius,
+                                                        pointcloud.radius * 2,
+                                                        pointcloud.radius * 2)];
+        [color setFill];
+        [path fill];
+    }
+}
 
-    NSValue* line = [NSValue valueWithBytes:&start objCType:@encode(NSPoint)];
-    NSValue* endLine = [NSValue valueWithBytes:&end objCType:@encode(NSPoint)];
-
-    // Create a path for the line
+- (void)drawGuiCircle:(const cpplot2d::detail::GuiCircle&)circle color:(NSColor*)color
+{
     NSBezierPath* path = [NSBezierPath bezierPath];
-    [path moveToPoint:start];  // Start point
-    [path lineToPoint:end];    // End point
-
-    // Stroke the path (draw the line)
-    [path stroke];
+    [path appendBezierPathWithOvalInRect:NSMakeRect(circle.center.first - circle.radius,
+                                                    circle.center.second - circle.radius,
+                                                    circle.radius * 2, circle.radius * 2)];
+    [color setFill];
+    [path fill];
+}
+- (void)drawBackground:(NSColor*)color inRect:(NSRect)dirtyRect
+{
+    [color setFill];
+    NSRectFill(dirtyRect);
 }
 
 - (void)drawRect:(NSRect)dirtyRect
 {
     [super drawRect:dirtyRect];
 
-    // Use the DrawCommand to draw the content
-    if (self.DrawCommand)
+    if (self.drawCallback)
     {
-        // Clear the background
-        [NSColorFromCppColor(self.DrawCommand->background) setFill];
-        NSRectFill(dirtyRect);
-
-        // Draw lines
-        for (const GuiLine& line : self.DrawCommand->overlayDrawables.lines)
-        {
-            [self drawLineFrom:NSMakePoint(line.p1.first, line.p1.second)
-                            to:NSMakePoint(line.p2.first, line.p2.second)
-                         color:NSColorFromCppColor(line.color)];
-        }
-
-        // Draw polylines
-        for (const GuiPolyline& polyline : self.DrawCommand->clippedDrawables.polylines)
-        {
-            NSMutableArray<NSValue*>* points = [NSMutableArray array];
-            for (const cpplot2d::detail::Point& p : polyline.points)
-            {
-                [points addObject:[NSValue valueWithPoint:NSMakePoint(p.first, p.second)]];
-            }
-            [self drawPolyline:points color:NSColorFromCppColor(polyline.color)];
-        }
-
-        // Draw circles
-        for (const GuiCircle& circle : self.DrawCommand->clippedDrawables.circles)
-        {
-            [self drawCircleAt:NSMakePoint(circle.center.first, circle.center.second)
-                        radius:circle.radius
-                         color:NSColorFromCppColor(circle.fillColor)];
-        }
-
-        // Draw rects
-        for (const GuiRect& rect : self.DrawCommand->overlayDrawables.rects)
-        {
-            [self drawRectWithTopLeft:NSMakePoint(rect.topLeft.first, rect.topLeft.second)
-                          bottomRight:NSMakePoint(rect.bottomRight.first, rect.bottomRight.second)
-                                color:NSColorFromCppColor(rect.borderColor)];
-        }
-
-        // Draw text
-        for (const GuiText& text : self.DrawCommand->overlayDrawables.text)
-        {
-            if (text.orientation == cpplot2d::detail::Orientation::HORIZONTAL)
-            {
-                if (text.alignment == cpplot2d::detail::Alignment::LEFT)
-                {
-                    [self drawText:[NSString stringWithUTF8String:text.text.c_str()]
-                           atPoint:NSMakePoint(text.pos.first, text.pos.second)
-                             color:NSColorFromCppColor(text.color)
-                          fontName:[NSString stringWithUTF8String:text.font.c_str()]
-                              size:text.size];
-                    if (!clip.isEnabled) return;
-                }
-                else
-                {
-                    [self drawRightAlignedText:[NSString stringWithUTF8String:text.text.c_str()]
-                                       atPoint:NSMakePoint(text.pos.first, text.pos.second)
-                                         color:NSColorFromCppColor(text.color)
-                                      fontName:[NSString stringWithUTF8String:text.font.c_str()]
-                                          size:text.size];
-                }
-            }
-            else if (text.orientation == cpplot2d::detail::Orientation::VERTICAL)
-            {
-                [self drawVerticalText:[NSString stringWithUTF8String:text.text.c_str()]
-                               atPoint:NSMakePoint(text.pos.first, text.pos.second)
-                                 color:NSColorFromCppColor(text.color)
-                              fontName:[NSString stringWithUTF8String:text.font.c_str()]
-                                  size:text.size];
-            }
-        }
+        (*self.drawCallback)();
     }
 }
 - (void)updateTrackingAreas
@@ -909,8 +878,8 @@ class Plot2D
 
             transformedPoints.reserve(xs.size());
         }
-        std::vector<Pointf> data;
-        std::vector<Point> transformedPoints;
+        std::vector<Pointf> data = {};
+        std::vector<Point> transformedPoints = {};
     };
 
     // Series for line plots
@@ -1050,7 +1019,7 @@ class Plot2D
         }
 
        private:
-        std::vector<ClipRect> m_stack;
+        std::vector<ClipRect> m_stack = {};
         IClipBackend& m_backend;
     };
 
@@ -1061,8 +1030,8 @@ class Plot2D
         virtual ~IGraphicsContext() = default;
         virtual void Init() = 0;
         virtual void Shutdown() = 0;
-        virtual Plot2D::IWindow* MakeWindow(Color color, Dimension2d defaultSize,
-                                            bool isVisible, const std::string& title) = 0;
+        virtual Plot2D::IWindow* MakeWindow(Color color, Dimension2d defaultSize, bool isVisible,
+                                            const std::string& title) = 0;
     };
 
     struct DataSeries
@@ -1073,10 +1042,11 @@ class Plot2D
 
     InteractionMode m_InteractionMode = InteractionMode::NONE;
     static std::unique_ptr<IGraphicsContext> m_graphicsContext;
-    std::unique_ptr<IWindow> m_window;
+    std::unique_ptr<IWindow> m_window = nullptr;
 
     // State representing what to draw in the plot window
-    std::unique_ptr<DrawCommand> m_plotDrawCommand = std::make_unique<DrawCommand>(); // TODO: no pointer needed
+    std::unique_ptr<DrawCommand> m_plotDrawCommand =
+        std::make_unique<DrawCommand>();  // TODO: no pointer needed
     // Separate state for mouse coordinates to avoid redrawing everything
     std::unique_ptr<DrawCommand> m_coordinateViewState = std::make_unique<DrawCommand>();
 
@@ -1106,7 +1076,7 @@ class Plot2D
     Pointf GetViewportToWindowScaleFactor(const Dimension2d& windowSize);
     Pointf GetTransformedCoordinates(Point coord);
     void UpdatePlotDrawCommand(DrawCommand* DrawCommand, IWindow* window);
-    void DrawBasePlot(DrawCommand* DrawCommand, IWindow* rect);
+    void DrawBasePlot(DrawCommand* DrawCommand, IWindow* window);
     void DrawLinePlots(DrawCommand* DrawCommand, const WindowRect& viewportRect,
                        DataSeries& dataSeries);
     void DrawLinePlot(DrawCommand* DrawCommand, const WindowRect& viewportRect,
@@ -1264,7 +1234,6 @@ class Plot2D
         };
 
        private:
-        //DrawCommand* m_DrawCommand;
         HWND m_hwnd = nullptr;
         POINT* m_pointBuffer = nullptr;
         int m_pointBufferSize = 0;
@@ -1310,8 +1279,7 @@ class Plot2D
     class X11Window : public IWindow, IClipBackend
     {
        public:
-        X11Window(Dimension2d m_defaultWindowSize, Dimension2d pos, std::string title,
-                  Color color);
+        X11Window(Dimension2d m_defaultWindowSize, Dimension2d pos, std::string title, Color color);
         ~X11Window() override;
 
         // IWindow
@@ -1403,16 +1371,16 @@ class Plot2D
             "9x15"};
     };
 #elif defined(__APPLE__)
-    class CocoaGraphicsContext : public cpplot2d::Plot2D::IGraphicsContext
+    class CocoaGraphicsContext : public IGraphicsContext
     {
        public:
         void Init() override;
         void Shutdown() override;
-        cpplot2d::Plot2D::IWindow* MakeWindow(Color color, Dimension2d defaultSize,
-                                              bool isVisible, const std::string& title) override;
+        IWindow* MakeWindow(Color color, Dimension2d defaultSize, bool isVisible,
+                            const std::string& title) override;
     };
 
-    class CocoaWindow : public cpplot2d::Plot2D::IWindow
+    class CocoaWindow : public IWindow, IClipBackend
     {
        public:
         CocoaWindow(Dimension2d m_defaultWindowSize, Dimension2d pos, std::string title,
@@ -1422,16 +1390,28 @@ class Plot2D
         Dimension2d GetAverageCharSize() override;
         void AddMenuButtons(const std::string menu, MenuButtons menuButtons) override;
         void SetIsVisible(bool isVisible) override;
-        void Invalidate(DrawCommand* DrawCommand) override;
+        void Invalidate() override;
         std::string GetTimestamp() override;
         void RunEventLoop() override;
-        void InvalidateRegion(const WindowRect& rect, DrawCommand* DrawCommand) override;
+        void InvalidateRegion(const WindowRect& rect) override;
         bool BrowseForFolder(std::string& outFolder);
         WindowRect GetRect() override;
         bool SaveScreenshot(const std::string& fileName) override;
+        void ProcessEvents() override;
+        void ApplyClip(const ClipRect& clip) override;
+        void RestoreClip(const ClipRect* clip) override;
+        void Draw(const DrawCommand& state) override;
+
+       protected:
+        void Draw(const GuiRect& rect) override;
+        void Draw(const GuiLine& line) override;
+        void Draw(const GuiCircle& circle) override;
+        void Draw(const GuiText& text) override;
+        void Draw(const GuiPolyline& polyline) override;
+        void Draw(const GuiPointCloud& pointcloud) override;
+        void* GetNSColorFromColor(const Color& color);
 
        private:
-        DrawCommand* m_DrawCommand;
         void* m_nsWindow;
         void* m_mainMenu;
         void* m_windowView;
@@ -1439,7 +1419,10 @@ class Plot2D
         void* m_mouseMoveObserver;
         void* m_mouseDownObserver;
         void* m_mouseUpObserver;
-        std::vector<void*> m_menuCallbacks;
+        std::function<void()> m_drawCallback = nullptr;
+        WindowRect m_invalidatedRect;
+        std::vector<void*> m_menuCallbacks = {};
+        std::map<Color, void*> m_colorMap = {};
 
         void OnMouseLButtonDown(int x, int y);
         void OnMouseLButtonUp(int x, int y);
@@ -1488,8 +1471,8 @@ void cpplot2d::Plot2D::Initialize()
 
     // Initialize graphics context and create window
     m_graphicsContext->Init();
-    m_window = std::unique_ptr<IWindow>(
-        m_graphicsContext->MakeWindow(m_plotProperties.backgroundColor, m_defaultWindowSize, false, title));
+    m_window = std::unique_ptr<IWindow>(m_graphicsContext->MakeWindow(
+        m_plotProperties.backgroundColor, m_defaultWindowSize, false, title));
 
     m_charSize = m_window->GetAverageCharSize();
     m_mouseCoordinateRectOffset = {40 * m_charSize.first, 2 * m_charSize.second};
@@ -1544,7 +1527,8 @@ void cpplot2d::Plot2D::UpdateOffsets(const std::vector<float>& x, const std::vec
     m_plotZeroOffsets.second = std::min(m_plotZeroOffsets.second, m_smallestDataPoints.second);
 
     m_viewZero = m_plotZeroOffsets;
-    const float plotPaddingScale = 1.05; // Some padding so plots aren't touching the viewport by default
+    const float plotPaddingScale =
+        1.05;  // Some padding so plots aren't touching the viewport by default
     m_viewSpan.first = m_dataSpans.first > 0.0f ? m_dataSpans.first * plotPaddingScale : 1.0f;
     m_viewSpan.second = m_dataSpans.second > 0.0f ? m_dataSpans.second * plotPaddingScale : 1.0f;
 
@@ -1684,7 +1668,7 @@ void cpplot2d::Plot2D::DrawBasePlot(DrawCommand* DrawCommand, IWindow* window)
         DrawCommand->items.emplace_back(DrawItem(
             GuiText(label.str(),
                     {x - charSize.first * 3, bottomBorderPos - m_tickLength - charSize.second},
-                    textColor, Orientation::HORIZONTAL),
+                    textColor, Orientation::HORIZONTAL, 10, font),
             ZOrder::Z_LABELS));
     }
     DrawCommand->items.emplace_back(
@@ -1697,7 +1681,7 @@ void cpplot2d::Plot2D::DrawBasePlot(DrawCommand* DrawCommand, IWindow* window)
         GuiText(
             label.str(),
             {rightBorderPos - charSize.first * 3, bottomBorderPos - m_tickLength - charSize.second},
-            textColor, Orientation::HORIZONTAL),
+            textColor, Orientation::HORIZONTAL, 10, font),
         ZOrder::Z_LABELS));
 
     // Draw Y-axis ticks & labels
@@ -1723,7 +1707,7 @@ void cpplot2d::Plot2D::DrawBasePlot(DrawCommand* DrawCommand, IWindow* window)
             DrawItem(GuiText(label.str(),
                              Point({std::max(10, leftBorderPos - charSize.first - m_tickLength),
                                     y - (int)(0.5 * charSize.second)}),
-                             textColor, Orientation::HORIZONTAL, 10, m_font, Alignment::RIGHT),
+                             textColor, Orientation::HORIZONTAL, 10, font, Alignment::RIGHT),
                      ZOrder::Z_LABELS));
     }
     DrawCommand->items.emplace_back(
@@ -1736,7 +1720,7 @@ void cpplot2d::Plot2D::DrawBasePlot(DrawCommand* DrawCommand, IWindow* window)
         DrawItem(GuiText(label.str(),
                          Point({std::max(10, int(leftBorderPos - charSize.first - m_tickLength)),
                                 topBorderPos - (int)(0.5 * charSize.second)}),
-                         textColor, Orientation::HORIZONTAL, 10, m_font, Alignment::RIGHT),
+                         textColor, Orientation::HORIZONTAL, 10, font, Alignment::RIGHT),
                  ZOrder::Z_LABELS));
 
     // Draw labels/title
@@ -1761,7 +1745,7 @@ void cpplot2d::Plot2D::DrawBasePlot(DrawCommand* DrawCommand, IWindow* window)
                                    static_cast<int>(title.size()) * charSize.first,
                                topBorderPos + charSize.second),
                          textColor, Orientation::HORIZONTAL, 14, font),
-                 ZOrder::Z_LABELS)); 
+                 ZOrder::Z_LABELS));
 
     DrawCommand->items.emplace_back(DrawItem(GetInteractionText(rect), ZOrder::Z_OVERLAY));
 }
@@ -2063,17 +2047,22 @@ void cpplot2d::Plot2D::OnMouseMoveCallback(IWindow& w, Point mousePos)
     switch (m_InteractionMode)
     {
         case InteractionMode::NONE:
+        {
             HandleMouseHover(w, mousePos);
             break;
-        case InteractionMode::PAN_DEFAULT:
-        case InteractionMode::ZOOM_DEFAULT:
-            break;
+        }
         case InteractionMode::PAN_ACTIVE:
+        {
             HandlePanDrag(w, mousePos);
             break;
+        }
         case InteractionMode::ZOOM_ACTIVE:
+        {
             HandleZoomDrag(w, mousePos);
             break;
+        }
+        default:
+            return;
     }
 }
 void cpplot2d::Plot2D::HandlePanDrag(IWindow& w, Point mousePos)
@@ -2245,7 +2234,7 @@ void cpplot2d::Plot2D::OnToggleZoomClicked(IWindow& w)
     {
         m_InteractionMode = InteractionMode::ZOOM_DEFAULT;
     }
-    
+
     m_plotDirty = true;
     w.Invalidate();
 }
@@ -2266,7 +2255,7 @@ cpplot2d::detail::GuiText cpplot2d::Plot2D::GetInteractionText(const WindowRect&
             break;
     }
     return GuiText(label, Point(rect.left + 5, rect.top - m_charSize.second), Color::Green(),
-                   Orientation::HORIZONTAL);
+                   Orientation::HORIZONTAL, 10, m_font);
 }
 
 void cpplot2d::Plot2D::OnToggleGrabClicked(IWindow& w)
@@ -2285,7 +2274,7 @@ void cpplot2d::Plot2D::OnToggleGrabClicked(IWindow& w)
 void cpplot2d::Plot2D::OnResetViewClicked(IWindow& w)
 {
     // Temporarily disable mouse hover to avoid blanking during next update
-    //w.OnMouseMoveCallback = nullptr;
+    // w.OnMouseMoveCallback = nullptr;
 
     // Restore saved defaults
     m_viewZero = m_defaultViewZero;
@@ -2295,7 +2284,7 @@ void cpplot2d::Plot2D::OnResetViewClicked(IWindow& w)
     w.Invalidate();
 
     // Re-enable mouse hover
-    //w.OnMouseMoveCallback = [this, &w](Point p) { this->OnMouseMoveCallback(w, p); };
+    // w.OnMouseMoveCallback = [this, &w](Point p) { this->OnMouseMoveCallback(w, p); };
 }
 std::string cpplot2d::Plot2D::FileName::Create(const std::string& dir, const std::string& filename)
 {
@@ -2423,10 +2412,10 @@ cpplot2d::Plot2D::Win32Window::Win32Window(Dimension2d m_defaultWindowSize, Dime
         }
     }
 
-    m_hwnd =
-        CreateWindowEx(0, TEXT("PlotWindowClass"), title.c_str(), WS_OVERLAPPEDWINDOW,
-                       CW_USEDEFAULT, CW_USEDEFAULT, m_defaultWindowSize.first,
-                       m_defaultWindowSize.second, nullptr, nullptr, GetModuleHandle(nullptr), this);
+    m_hwnd = CreateWindowEx(0, TEXT("PlotWindowClass"), title.c_str(), WS_OVERLAPPEDWINDOW,
+                            CW_USEDEFAULT, CW_USEDEFAULT, m_defaultWindowSize.first,
+                            m_defaultWindowSize.second, nullptr, nullptr, GetModuleHandle(nullptr),
+                            this);
 
     if (!m_hwnd)
     {
@@ -2939,7 +2928,6 @@ void cpplot2d::Plot2D::Win32Window::Draw(const GuiCircle& circle)
             clientRect.top - (circle.center.second + circle.radius),
             circle.center.first + circle.radius,
             clientRect.top - (circle.center.second - circle.radius));
-    
 }
 void cpplot2d::Plot2D::Win32Window::Draw(const GuiText& text)
 {
@@ -2974,7 +2962,6 @@ void cpplot2d::Plot2D::Win32Window::Draw(const GuiPolyline& polyline)
     }
 
     Polyline(m_backBuffer.backDC, m_pointBuffer, static_cast<int>(size));
-
 }
 void cpplot2d::Plot2D::Win32Window::Draw(const GuiPointCloud& pointcloud)
 {
@@ -3078,43 +3065,6 @@ void cpplot2d::Plot2D::Win32Window::Draw(const DrawCommand& state)
     EndPaint(m_hwnd, &ps);
 }
 
-//void cpplot2d::Plot2D::Win32Window::DrawDrawCommand(const RECT& clientRect,
-//                                                    const RECT& invalidatedRect)
-//{
-//    m_drawnOnce = true;
-//    PAINTSTRUCT ps;
-//    HDC hdc = BeginPaint(m_hwnd, &ps);
-//    SetGraphicsMode(hdc, GM_ADVANCED);
-//
-//    // Fill background first
-//    HBRUSH backgroundBrush = GetBrushForColor(m_DrawCommand->background);
-//    FillRect(m_backBuffer.backDC, &invalidatedRect, backgroundBrush);
-//
-//    // Draw all items
-//    ClipStack clipStack(*this);
-//    for (const DrawItem& item : m_DrawCommand->items)
-//    {
-//        if (item.clip.isEnabled)
-//        {
-//            clipStack.Push(item.clip);
-//
-//            std::visit([&](auto&& payload) { Draw(payload); }, item.payload);
-//
-//            clipStack.Pop();
-//        }
-//        else
-//        {
-//            std::visit([&](auto&& payload) { Draw(payload); }, item.payload);
-//        }
-//    }
-//
-//    // Double-buffering: copy back buffer to window DC
-//    BitBlt(hdc, 0, 0, m_backBuffer.bufferW, m_backBuffer.bufferH, m_backBuffer.backDC, 0, 0,
-//           SRCCOPY);
-//
-//    EndPaint(m_hwnd, &ps);
-//}
-
 void cpplot2d::Plot2D::Win32Window::InvalidateRegion(const cpplot2d::Plot2D::WindowRect& windowRect)
 {
     RECT win32Rect;
@@ -3159,10 +3109,11 @@ cpplot2d::Plot2D::IWindow* Plot2D::CocoaGraphicsContext::MakeWindow(Color color,
     return window;
 }
 
-Plot2D::CocoaWindow::CocoaWindow(Dimension2d m_defaultWindowSize, Dimension2d pos, std::string title,
-                                 Color color)
+Plot2D::CocoaWindow::CocoaWindow(Dimension2d m_defaultWindowSize, Dimension2d pos,
+                                 std::string title, Color color)
 {
-    NSRect frame = NSMakeRect(0, 0, m_defaultWindowSize.first, m_defaultWindowSize.second);
+    NSRect frame =
+        NSMakeRect(pos.first, pos.second, m_defaultWindowSize.first, m_defaultWindowSize.second);
     NSWindow* window =
         [[NSWindow alloc] initWithContentRect:frame
                                     styleMask:(NSWindowStyleMaskTitled | NSWindowStyleMaskClosable |
@@ -3198,6 +3149,12 @@ Plot2D::CocoaWindow::CocoaWindow(Dimension2d m_defaultWindowSize, Dimension2d po
     [windowView display];
 
     m_windowView = (void*)windowView;
+
+    m_drawCallback = [this]()
+    {
+        if (OnDrawCallback) this->OnDrawCallback();
+    };
+    windowView.drawCallback = &m_drawCallback;
 
     // Subscribe to resize event
     id resizeObserver =
@@ -3306,6 +3263,16 @@ inline Plot2D::CocoaWindow::~CocoaWindow()
     [[NSNotificationCenter defaultCenter] removeObserver:mouseDownObserver];
     [[NSNotificationCenter defaultCenter] removeObserver:resizeObserver];
     [[NSNotificationCenter defaultCenter] removeObserver:mouseMoveObserver];
+
+    // Clear colors
+    for (auto& pair : m_colorMap)
+    {
+        NSColor* nsColor = static_cast<NSColor*>(pair.second);
+        [nsColor release];
+    }
+    m_colorMap.clear();
+
+    m_drawCallback = nullptr;
 }
 
 cpplot2d::Plot2D::Dimension2d Plot2D::CocoaWindow::GetAverageCharSize()
@@ -3360,16 +3327,115 @@ void Plot2D::CocoaWindow::SetIsVisible(bool isVisible)
         [window orderOut:nil];
     }
 }
-void Plot2D::CocoaWindow::Invalidate(DrawCommand* DrawCommand)
+void Plot2D::CocoaWindow::Invalidate()
 {
-    m_DrawCommand = DrawCommand;
-
-    // Update the WindowView's pointer to the DrawCommand
-    WindowView* view = reinterpret_cast<WindowView*>(m_windowView);
-    view.DrawCommand = DrawCommand;
-
     // Mark the entire view for redraw
+    m_invalidatedRect = GetRect();
+    WindowView* view = reinterpret_cast<WindowView*>(m_windowView);
     [view setNeedsDisplay:YES];
+}
+void cpplot2d::Plot2D::CocoaWindow::ProcessEvents()
+{
+    NSEvent* event = [NSApp nextEventMatchingMask:NSEventMaskAny
+                                        untilDate:[NSDate distantPast]
+                                           inMode:NSDefaultRunLoopMode
+                                          dequeue:YES];
+    if (event)
+    {
+        [NSApp sendEvent:event];
+    }
+}
+void cpplot2d::Plot2D::CocoaWindow::ApplyClip(const ClipRect& clip)
+{
+    [NSGraphicsContext saveGraphicsState];
+    NSRectClip(NSMakeRect(clip.rect.left, clip.rect.bottom, clip.rect.right - clip.rect.left,
+                          clip.rect.top - clip.rect.bottom));
+}
+void cpplot2d::Plot2D::CocoaWindow::RestoreClip(const ClipRect* clip)
+{
+    [NSGraphicsContext restoreGraphicsState];
+}
+inline void cpplot2d::Plot2D::CocoaWindow::Draw(const DrawCommand& state)
+{
+    // Draw background first
+    NSColor* color = static_cast<NSColor*>(GetNSColorFromColor(state.background));
+    WindowView* view = reinterpret_cast<WindowView*>(m_windowView);
+    NSRect nsRect = NSMakeRect(m_invalidatedRect.left,                            // x origin
+                               m_invalidatedRect.bottom,                          // y origin
+                               m_invalidatedRect.right - m_invalidatedRect.left,  // width
+                               m_invalidatedRect.top - m_invalidatedRect.bottom   // height
+    );
+    [view drawBackground:color inRect:nsRect];
+
+    // Draw all items
+    ClipStack clipStack(*this);
+    for (const DrawItem& item : state.items)
+    {
+        if (item.clip.isEnabled)
+        {
+            clipStack.Push(item.clip);
+
+            std::visit([&](auto&& payload) { Draw(payload); }, item.payload);
+
+            clipStack.Pop();
+        }
+        else
+        {
+            std::visit([&](auto&& payload) { Draw(payload); }, item.payload);
+        }
+    }
+}
+inline void* cpplot2d::Plot2D::CocoaWindow::GetNSColorFromColor(const Color& color)
+{
+    auto&& it = m_colorMap.find(color);
+    if (it != m_colorMap.end())
+    {
+        return it->second;
+    }
+
+    NSColor* nsColor = [NSColor colorWithRed:(float)color.r / 255.0
+                                       green:(float)color.g / 255.0
+                                        blue:(float)color.b / 255.0
+                                       alpha:1.0];
+    m_colorMap[color] = nsColor;
+    return nsColor;
+}
+inline void cpplot2d::Plot2D::CocoaWindow::Draw(const GuiRect& rect)
+{
+    NSColor* color = static_cast<NSColor*>(GetNSColorFromColor(rect.borderColor));
+    WindowView* view = reinterpret_cast<WindowView*>(m_windowView);
+    [view drawGuiRect:rect color:color];
+}
+inline void cpplot2d::Plot2D::CocoaWindow::Draw(const GuiLine& line)
+{
+    NSColor* color = static_cast<NSColor*>(GetNSColorFromColor(line.color));
+    WindowView* view = reinterpret_cast<WindowView*>(m_windowView);
+    [view drawGuiLine:line color:color];
+}
+inline void cpplot2d::Plot2D::CocoaWindow::Draw(const GuiCircle& circle)
+{
+    NSColor* color = static_cast<NSColor*>(GetNSColorFromColor(circle.fillColor));
+    WindowView* view = reinterpret_cast<WindowView*>(m_windowView);
+    [view drawGuiCircle:circle color:color];
+}
+void cpplot2d::Plot2D::CocoaWindow::Draw(const GuiText& text)
+{
+    NSColor* color = static_cast<NSColor*>(GetNSColorFromColor(text.color));
+    WindowView* view = reinterpret_cast<WindowView*>(m_windowView);
+    [view drawGuiText:text color:color];
+}
+inline void cpplot2d::Plot2D::CocoaWindow::Draw(const GuiPolyline& polyline)
+{
+    NSColor* color = static_cast<NSColor*>(GetNSColorFromColor(polyline.color));
+    WindowView* view = reinterpret_cast<WindowView*>(m_windowView);
+    [view drawGuiPolyline:polyline color:color];
+}
+inline void cpplot2d::Plot2D::CocoaWindow::Draw(const GuiPointCloud& pointcloud)
+{
+    NSColor* color = static_cast<NSColor*>(GetNSColorFromColor(pointcloud.color));
+
+    WindowView* view = reinterpret_cast<WindowView*>(m_windowView);
+    [view drawGuiPointCloud:pointcloud color:color];
 }
 
 std::string Plot2D::CocoaWindow::GetTimestamp()
@@ -3391,14 +3457,9 @@ void Plot2D::CocoaWindow::RunEventLoop()
     // Start the event loop
     [NSApp run];
 }
-void Plot2D::CocoaWindow::InvalidateRegion(const WindowRect& rect, DrawCommand* DrawCommand)
+void Plot2D::CocoaWindow::InvalidateRegion(const WindowRect& rect)
 {
-    m_DrawCommand = DrawCommand;
-
-    // Update the WindowView's pointer to the DrawCommand
-    WindowView* view = reinterpret_cast<WindowView*>(m_windowView);
-    view.DrawCommand = DrawCommand;
-
+    m_invalidatedRect = rect;
     // Convert WindowRect (bottom-left origin) to NSRect (top-left origin)
     NSWindow* window = reinterpret_cast<NSWindow*>(m_nsWindow);
     NSRect contentRect = [window contentRectForFrameRect:[window frame]];
@@ -3410,9 +3471,10 @@ void Plot2D::CocoaWindow::InvalidateRegion(const WindowRect& rect, DrawCommand* 
     );
 
     // Mark the region for redraw
+    WindowView* view = reinterpret_cast<WindowView*>(m_windowView);
     [view setNeedsDisplayInRect:nsRect];
 }
-Plot2D::WindowRect Plot2D::CocoaWindow::GetRect()
+inline Plot2D::WindowRect Plot2D::CocoaWindow::GetRect()
 {
     NSWindow* window = reinterpret_cast<NSWindow*>(m_nsWindow);
     NSRect contentRect = [window contentRectForFrameRect:[window frame]];
@@ -3452,8 +3514,9 @@ cpplot2d::Plot2D::X11Window::X11Window(Dimension2d m_defaultWindowSize, Dimensio
     }
     m_screen = DefaultScreen(m_display);
     Window root = RootWindow(m_display, m_screen);
-    m_window = XCreateSimpleWindow(
-        m_display, root, pos.first, pos.second, m_defaultWindowSize.first, m_defaultWindowSize.second, 1, ToX11Pixel(color), ToX11Pixel(color));
+    m_window =
+        XCreateSimpleWindow(m_display, root, pos.first, pos.second, m_defaultWindowSize.first,
+                            m_defaultWindowSize.second, 1, ToX11Pixel(color), ToX11Pixel(color));
 
     XSetWindowAttributes attrs;
     // Pin the current contents to the top-left (0,0) during resize
