@@ -19,6 +19,15 @@ target_include_directories(cpplot2d INTERFACE
 # Require C++17 or higher
 target_compile_features(cpplot2d INTERFACE cxx_std_17)
 
+# === Fetch Catch2 for tests ===
+include(FetchContent)
+FetchContent_Declare(
+    catch2
+    GIT_REPOSITORY https://github.com/catchorg/Catch2.git
+    GIT_TAG v3.7.0  # use a stable version
+)
+FetchContent_MakeAvailable(catch2)
+
 # === Integration test executable ===
 if (APPLE)
     add_executable(test_plot_mac tests/integration/test_plot.mm)
@@ -27,10 +36,11 @@ if (APPLE)
         cpplot2d
         "-framework Cocoa"
         "-framework CoreGraphics" 
+        Catch2::Catch2WithMain
     )
 elseif (WIN32)
     add_executable(test_plot tests/integration/test_plot.cpp)
-    target_link_libraries(test_plot PRIVATE cpplot2d gdi32 user32)
+    target_link_libraries(test_plot PRIVATE cpplot2d gdi32 user32 Catch2::Catch2WithMain)
 else()
     find_package(X11 REQUIRED)
     
@@ -38,17 +48,9 @@ else()
     target_include_directories(cpplot2d INTERFACE ${X11_INCLUDE_DIR})
     
     add_executable(test_plot tests/integration/test_plot.cpp)
-    target_link_libraries(test_plot PRIVATE cpplot2d)
+    target_link_libraries(test_plot PRIVATE cpplot2d Catch2::Catch2WithMain)
 endif()
 
-# === Unit tests with Catch2 ===
-include(FetchContent)
-FetchContent_Declare(
-    catch2
-    GIT_REPOSITORY https://github.com/catchorg/Catch2.git
-    GIT_TAG v3.7.0  # use a stable version
-)
-FetchContent_MakeAvailable(catch2)
 
 #=== Unit test executable ===
 if (APPLE)

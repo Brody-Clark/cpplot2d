@@ -11,14 +11,12 @@ class Plot2DBenchmark : public cpplot2d::Plot2D
         : cpplot2d::Plot2D()
         {
         }
-        void TestGetDataPolyline(const std::vector<float>& x,
+        void TestDrawLinePlot(DrawCommand* state, const std::vector<float>& x,
                                                 const std::vector<float>& y,
-                                                cpplot2d::Color color, 
-                                                const WindowRect& rect, GuiPolyline& output)
+                                                int top, int left, int bottom, int right)
         {
             LineSeries series(x, y, cpplot2d::Color::Black(), 1);
-           
-            GetDataPolyline(series, rect, output);
+            DrawLinePlot(state, WindowRect(top, left, bottom, right), series);
         }
 
     // Minimal mock window implementation
@@ -33,13 +31,13 @@ class Plot2DBenchmark : public cpplot2d::Plot2D
         {
             return {5, 5};
         }
-        void InvalidateRegion(const WindowRect& rect, WindowState* windowState) override
+        void InvalidateRegion(const WindowRect& rect) override
         {
         }
         void AddMenuButtons(const std::string menu, MenuButtons menuButtons) override
         {
         }
-        void Invalidate(WindowState* windowState) override
+        void Invalidate() override
         {
         }
         bool SaveScreenshot(const std::string& fileName) override
@@ -60,11 +58,27 @@ class Plot2DBenchmark : public cpplot2d::Plot2D
         void RunEventLoop() override
         {
         }
+        void ProcessEvents() override 
+        {
+
+        }
+        void Draw(const DrawCommand& state) override
+        {
+
+        }
         // Callbacks
         std::function<void(Point)> OnMouseHoverCallback;
         std::function<void()> OnResizeStartCallback;
         std::function<void()> OnResizeEndCallback;
         std::function<void()> OnResizeCallback;
+
+        protected:
+        void Draw(const GuiRect& rect) override{}
+        void Draw(const GuiLine& line) override{}
+        void Draw(const GuiCircle& circle) override{}
+        void Draw(const GuiText& text) override{}
+        void Draw(const GuiPolyline& polyline) override{}
+        void Draw(const GuiPointCloud& pointcloud) override{}
 
        private:
         int m_width;
@@ -84,13 +98,14 @@ static void BM_GetDataPolyline(benchmark::State& state)
         ys[i] = static_cast<float>(i % 100);
     }
 
+    cpplot2d::detail::DrawCommand drawCommand;
     // Construct Plot
     Plot2DBenchmark plot(xs, ys, "benchmark_plot");
     Plot2DBenchmark::MockWindow mockWindow(800, 600);
     cpplot2d::detail::GuiPolyline line;
     for (auto _ : state)
     {
-        plot.TestGetDataPolyline(xs, ys, cpplot2d::Color::Green(), mockWindow.GetRect(), line);
+        plot.TestDrawLinePlot(&drawCommand, xs, ys, 600, 20, 20, 400);
         //benchmark::DoNotOptimize(poly);
     }
 }

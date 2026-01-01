@@ -1,9 +1,9 @@
 > [!IMPORTANT]
 > **Project Status: In Progress**
 >
-> _This project is actively being developed. Some features are incomplete or experimental._
+> _This project is actively being developed. Some features may be missing or incomplete._
 > 
-> Planned features (In progress): Scatter plots, plot Legends, default color themes, hotkeys, action buttons
+> Planned features (In progress): plot Legend, default color themes, hotkeys, action bar
 
 <p align="center">
   <img src="resources/cpplot2d_logotext.png" alt="logotext" width="600">
@@ -30,9 +30,11 @@
 
 ## Usage
 
+This library is contained a single header file located at `include/cpplot2d.h`, you can also [download the latest stable release here](https://github.com/Brody-Clark/cpplot2d/releases/latest/download/cpplot2d.h).
+
 ### Windows/Linux
 
-Simply copy the header file from `include/cpplot2d.h` or [download the latest release here](https://github.com/Brody-Clark/cpplot2d/releases/latest/download/cpplot2d.h), and include it in your project and define the macro `CPPLOT2D_IMPLEMENTATION` **once** before the inlcude statement. Only in **one** C++ source file (`.cpp` or `.cxx`), you must define the implementation macro before including the header. This generates the function definitions.
+Simply copy the `cpplot2d.h` header file, include it in your project, and define the macro `CPPLOT2D_IMPLEMENTATION` **once** before the inlcude statement. Only in **one** C++ source file (`.cpp` or `.cxx`), you must define the implementation macro before including the header. This generates the function definitions.
 
 ```cpp
 #define CPPLOT2D_IMPLEMENTATION  // In ONE file only (e.g., main.cpp or cpplot2d_impl.cpp)
@@ -154,6 +156,31 @@ int main()
 
 }
 ```
+
+### Scatter plot
+
+```cpp
+
+#include "cpplot2d.h"
+
+int main()
+{
+    // Create datasets
+    std::vector<float> x1 = {1,2,3};
+    std::vector<float> y1 = {1,2,3};
+    std::vector<float> x2 = {4,5,6};
+    std::vector<float> y2 = {4,5,6};
+
+    // Create plot object and add 2 point sets with radii 1 and 2 respectively
+    cpplot2d::Plot2D plot;
+    plot.AddPoints(x1, y1, cpplot2d::Color::FromRGB(0, 255, 0), 1)
+        .AddPoints(x2, y2, cpplot2d::Color::FromRGB(255, 255, 0), 2);
+    
+    // Show the plot
+    plot.Show();
+}
+```
+
 ---
 
 ## Contributing
