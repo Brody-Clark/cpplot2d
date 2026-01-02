@@ -142,6 +142,10 @@ struct Color
     {
         return {255, 255, 255};
     }
+    static constexpr Color Grey()
+    {
+        return {227, 227, 227};
+    }
     static constexpr Color Red()
     {
         return {255, 0, 0};
@@ -282,26 +286,28 @@ struct WindowRectf
 struct GuiPolyline
 {
    public:
-    GuiPolyline(const std::vector<Point>& points = {}, Color c = Color::Green(), int thickness = 1)
+    GuiPolyline(const std::vector<Point>& points = {}, Color c = Color::Green(),
+                uint8_t thickness = 1)
         : points(points), color(c), thickness(thickness)
     {
     }
     std::vector<Point> points = {};
     Color color;
-    int thickness;
+    uint8_t thickness = 1;
 };
 
 // Represents a single line to be drawn in the window
 struct GuiLine
 {
    public:
-    GuiLine(Point p1, Point p2, Color c) : p1(p1), p2(p2), color(c)
+    GuiLine(Point p1, Point p2, Color c, uint8_t thickness = 1) : p1(p1), p2(p2), color(c), thickness(thickness)
     {
     }
     GuiLine() = default;
     Point p1 = {-1, -1};
     Point p2 = {-1, -1};
     Color color = Color::White();
+    uint8_t thickness = 1;
 };
 
 // Represents a text entry to be drawn in the window
@@ -309,7 +315,7 @@ struct GuiText
 {
    public:
     GuiText(const std::string& text, const Point pos, const Color& color, Orientation orientation,
-            int size = 10, std::string font = "", Alignment alignment = Alignment::LEFT)
+            uint8_t size = 10, std::string font = "", Alignment alignment = Alignment::LEFT)
         : text(text),
           pos(pos),
           color(color),
@@ -322,7 +328,7 @@ struct GuiText
     GuiText() = default;
     std::string text = "";
     Point pos = {-1, -1};
-    int size = 10;
+    uint8_t size = 10;
     std::string font = "";
     Color color = Color::White();
     Orientation orientation = Orientation::HORIZONTAL;
@@ -333,10 +339,13 @@ struct GuiText
 struct GuiRect
 {
    public:
-    GuiRect(Point topLeft, Point bottomRight, Color borderColor, int borderWidth = 1)
+    GuiRect(Point topLeft, Point bottomRight, Color borderColor, bool isFilled = false,
+            Color fillColor = Color::White(), uint8_t borderWidth = 1)
         : topLeft(topLeft),
           bottomRight(bottomRight),
           borderColor(borderColor),
+          isFilled(isFilled),
+          fillColor(fillColor),
           borderWidth(borderWidth)
     {
     }
@@ -344,53 +353,40 @@ struct GuiRect
     Point topLeft = {-1, -1};
     Point bottomRight = {-1, -1};
     Color borderColor = Color::White();
-    int borderWidth = 1;
-};
-
-struct GuiFrame
-{
-   public:
-    GuiFrame(Point topLeft, Point bottomRight, Color borderColor, int borderWidth = 1)
-        : topLeft(topLeft),
-          bottomRight(bottomRight),
-          borderColor(borderColor),
-          borderWidth(borderWidth)
-    {
-    }
-    GuiFrame() = default;
-    Point topLeft = {-1, -1};
-    Point bottomRight = {-1, -1};
-    Color borderColor = Color::White();
-    int borderWidth = 1;
+    bool isFilled = false;
+    Color fillColor = Color::White();
+    uint8_t borderWidth = 1;
 };
 
 // Represents a circle to be drawn in the window
 struct GuiCircle
 {
    public:
-    GuiCircle(Point center = {-1, -1}, int radius = 1, Color fillColor = Color::Green())
-        : center(center), radius(radius), fillColor(fillColor)
+    GuiCircle(Point center = {-1, -1}, uint8_t radius = 1, bool isFilled = true, Color fillColor = Color::Green(), uint8_t borderThickness = 1)
+        : center(center), radius(radius), isFilled(isFilled), fillColor(fillColor), borderThickness(borderThickness)
     {
     }
 
     Point center = {-1, -1};
-    int radius = 1;
+    uint8_t radius = 1;
+    bool isFilled = true;
     Color fillColor = Color::Green();
+    uint8_t borderThickness = 1;
 };
 
-// Represents a series of cirlces with shared radii and color.
+// Represents a series of filled cirlces with shared radii and color.
 struct GuiPointCloud
 {
    public:
     GuiPointCloud(const std::vector<Point>& points = {}, Color color = Color::Green(),
-                  int radius = 1)
+                  uint8_t radius = 1)
         : points(points), color(color), radius(radius)
     {
     }
 
     std::vector<Point> points = {};
     Color color = Color::Green();
-    int radius = 1;
+    uint8_t radius = 1;
 };
 
 struct ClipRect
@@ -407,7 +403,7 @@ struct ClipRect
 };
 
 using DrawPayload = std::variant<GuiLine, GuiRect, GuiText, GuiCircle, GuiPolyline, GuiPointCloud>;
-enum ZOrder : int
+enum ZOrder : uint8_t
 {
     Z_BACKGROUND = 0,
     Z_GRID = 10,
@@ -415,7 +411,10 @@ enum ZOrder : int
     Z_AXES = 30,
     Z_MARKERS = 40,
     Z_LABELS = 50,
-    Z_OVERLAY = 60
+    Z_OVERLAY = 60,
+    Z_ACTIONBAR = 70,
+    Z_ACTIONBAR_ICONS = 80,
+    Z_DEBUG_OVERLAY = 255
 };
 struct DrawItem
 {
@@ -886,13 +885,14 @@ class Plot2D
     using GuiRect = detail::GuiRect;
     using DrawCommand = detail::DrawCommand;
     using DrawItem = detail::DrawItem;
+    using DrawPayload = detail::DrawPayload;
     using ZOrder = detail::ZOrder;
     using ClipRect = detail::ClipRect;
     using Orientation = detail::Orientation;
     using Alignment = detail::Alignment;
     using WindowRect = detail::WindowRect;
     using WindowRectf = detail::WindowRectf;
-    using MenuButtons = std::map<std::string, std::function<void()>>;
+    using ActionButton = std::pair<WindowRect, std::function<void()>>;
 
     // Plot interaction modes
     enum class InteractionMode : uint8_t
@@ -979,9 +979,6 @@ class Plot2D
 
         // Invalidates only the space  encompassed in the given rect
         virtual void InvalidateRegion(const WindowRect& rect) = 0;
-
-        // Adds a button to the menu bar
-        virtual void AddMenuButtons(const std::string menu, MenuButtons menuButtons) = 0;
 
         // Saves a screenshot of the window as an image file. fileName is the name of the file only.
         virtual bool SaveScreenshot(const std::string& fileName) = 0;
@@ -1080,6 +1077,43 @@ class Plot2D
         std::vector<ScatterSeries> points = {};
     };
 
+    struct IconLine
+    {
+        Point a;
+        Point b;
+        uint8_t thickness;
+    };
+    struct IconCircle
+    {
+        Point center;
+        uint16_t radius;
+        uint8_t borderThickness;
+        bool isFilled;
+    };
+    struct IconRect
+    {
+        WindowRect rect;
+        bool isFilled;
+        uint8_t borderThickness;
+    };
+
+    struct IconPolyline
+    {
+        std::vector<Point> points;
+    };
+
+    using IconPrimitive = std::variant<IconLine, IconCircle, IconRect, IconPolyline>;
+    struct ButtonIcon
+    {
+        WindowRect localBounds;
+        std::vector<DrawPayload> geometry;
+    };
+    struct IconTransform
+    {
+        Dimension2d translate;
+        uint16_t scale = 1;
+    };
+
     InteractionMode m_InteractionMode = InteractionMode::NONE;
     static std::unique_ptr<IGraphicsContext> m_graphicsContext;
     std::unique_ptr<IWindow> m_window = nullptr;
@@ -1095,6 +1129,11 @@ class Plot2D
                    Color color = Color::Green(), int size = 1);
     void DoAddScatter(const std::vector<float>& xf, const std::vector<float>& yf, Color color,
                       int radius);
+    void DrawIcon(const ButtonIcon& icon, const WindowRect& buttonRect,
+                                    DrawCommand& out, ZOrder z);
+    IconTransform ComputeCenteredTransform(
+    const WindowRect& iconBounds,
+    const WindowRect& buttonRect);
     WindowRectf PadRect(const WindowRectf& r, float padFrac);
     void UpdateDataBounds(const std::vector<float>& x, const std::vector<float>& y);
     void OnMouseMoveCallback(IWindow& window, Point mousePos);
@@ -1120,6 +1159,7 @@ class Plot2D
                              const Dimension2df& scales, const Pointf& point, Point& out);
     void UpdatePlotDrawCommand(DrawCommand* DrawCommand, IWindow* window);
     void DrawBasePlot(DrawCommand* DrawCommand, IWindow* window);
+    void DrawActionBar(DrawCommand* DrawCommand, IWindow* window);
     void DrawLinePlots(DrawCommand* DrawCommand, const WindowRect& viewportRect,
                        DataSeries& dataSeries);
     void DrawLinePlot(DrawCommand* DrawCommand, const WindowRect& viewportRect,
@@ -1158,6 +1198,28 @@ class Plot2D
     static constexpr int m_tickLength = 4;
     Dimension2d m_defaultWindowSize = {800, 600};
     PlotProperties m_plotProperties;
+    std::vector<ActionButton> m_actionButtons = {};
+
+    const ButtonIcon m_zoomButton{
+        {0, 0, 24, 24},
+        {IconCircle{{8, 8}, 6}, IconLine{{4, 8}, {12, 8}}, IconLine{{8, 4}, {8, 12}}}};
+    const ButtonIcon m_homeButton{{0, 0, 24, 24},
+                                  {IconPolyline{{{0, 0},
+                                                 {0, 12},
+                                                 {12, 24},
+                                                 {12, 12},
+                                                 {24, 0},
+                                                 {16, 0},
+                                                 {16, 8},
+                                                 {8, 8},
+                                                 {8, 0},
+                                                 {0, 0}}}}};
+    const ButtonIcon m_panButton{{0, 0, 24, 24},
+                                 {IconLine{{12, 0}, {12, 24}}, IconLine{{0, 12}, {24, 12}},
+                                  IconPolyline{{{9, 3}, {12, 0}, {15, 3}, {9, 3}}},
+                                  IconPolyline{{{0, 9}, {0, 12}, {0, 15}, {0, 9}}},
+                                  IconPolyline{{{21, 9}, {24, 12}, {21, 15}, {21, 9}}},
+                                  IconPolyline{{{9, 21}, {15, 21}, {12, 24}, {9, 21}}}}};
 
 #ifdef CPPLOT2D_HEADLESS  // Null/Headless implementation
     class NullWindow : public cpplot2d::Plot2D::IWindow
@@ -1315,7 +1377,6 @@ class Plot2D
 
         // IWindow
         Dimension2d GetAverageCharSize() override;
-        void AddMenuButtons(const std::string menu, MenuButtons menuButtons) override;
         void SetIsVisible(bool isVisible) override;
         void Invalidate() override;
         void Draw(const DrawCommand& state) override;
@@ -1521,15 +1582,15 @@ void cpplot2d::Plot2D::Initialize()
     m_window->OnDrawCallback = [this]() { this->OnDrawWindowCallback(*m_window); };
 
     // Add menu buttons
-    MenuButtons fileMenuButtons;
-    fileMenuButtons["Save"] = [this]() { this->OnSaveClicked(*m_window); };
-    m_window->AddMenuButtons("File", fileMenuButtons);
+    // MenuButtons fileMenuButtons;
+    // fileMenuButtons["Save"] = [this]() { this->OnSaveClicked(*m_window); };
+    // m_window->AddMenuButtons("File", fileMenuButtons);
 
-    MenuButtons viewMenuButtons;
-    viewMenuButtons["Toggle Zoom"] = [this]() { this->OnToggleZoomClicked(*m_window); };
-    viewMenuButtons["Toggle Grab"] = [this]() { this->OnToggleGrabClicked(*m_window); };
-    viewMenuButtons["Reset View"] = [this]() { this->OnResetViewClicked(*m_window); };
-    m_window->AddMenuButtons("View", viewMenuButtons);
+    // MenuButtons viewMenuButtons;
+    // viewMenuButtons["Toggle Zoom"] = [this]() { this->OnToggleZoomClicked(*m_window); };
+    // viewMenuButtons["Toggle Grab"] = [this]() { this->OnToggleGrabClicked(*m_window); };
+    // viewMenuButtons["Reset View"] = [this]() { this->OnResetViewClicked(*m_window); };
+    // m_window->AddMenuButtons("View", viewMenuButtons);
 }
 
 void cpplot2d::Plot2D::UpdateDataBounds(const std::vector<float>& x, const std::vector<float>& y)
@@ -1594,9 +1655,8 @@ void cpplot2d::Plot2D::DoAddScatter(const std::vector<float>& xf, const std::vec
     // Sort the data ahead of time since the update loop will cull duplicates
     ScatterSeries series(xf, yf, color, radius * 4);
     std::sort(series.transformedPoints.begin(), series.transformedPoints.end(),
-        [](const Point& a, const Point& b) {
-            return a.first < b.first || (a.first == b.first && a.first < b.first);
-        });
+              [](const Point& a, const Point& b)
+              { return a.first < b.first || (a.first == b.first && a.first < b.first); });
     m_dataSeries.points.emplace_back(series);
 
     UpdateDataBounds(xf, yf);
@@ -1643,6 +1703,78 @@ inline cpplot2d::Plot2D::WindowRectf cpplot2d::Plot2D::PadRect(const WindowRectf
     float dy = r.Height() * padFrac;
 
     return WindowRectf(r.top + dy, r.left - dx, r.right + dx, r.bottom - dy);
+}
+inline cpplot2d::Plot2D::IconTransform cpplot2d::Plot2D::ComputeCenteredTransform(
+    const WindowRect& iconBounds,
+    const WindowRect& buttonRect)
+{
+    int iconW = iconBounds.Width();
+    int iconH = iconBounds.Height();
+
+    int x = buttonRect.left
+        + static_cast<int>((buttonRect.Width()  - iconW) * 0.5f);
+    int y = buttonRect.bottom
+        + static_cast<int>((buttonRect.Height() - iconH) * 0.5f);
+
+    return {{x, y}, 1};
+}
+inline 
+inline void cpplot2d::Plot2D::DrawIcon(const ButtonIcon& icon, const WindowRect& buttonRect,
+                                       DrawCommand& out, ZOrder z)
+{
+    IconTransform t = ComputeCenteredTransform(icon.localBounds, buttonRect);
+
+    for (const IconPrimitive& prim : icon.geometry)
+    {
+        std::visit(
+            [&](auto&& p)
+            {
+                using T = std::decay_t<decltype(p)>;
+
+                if constexpr (std::is_same_v<T, IconLine>)
+                {
+                    GuiLine line;
+                    line.p1 = {int(p.a.first * t.scale + t.translate.first),
+                              int(p.a.second * t.scale + t.translate.second)};
+                    line.p2 = {int(p.b.first * t.scale + t.translate.first),
+                              int(p.b.second * t.scale + t.translate.second)};
+                    line.thickness = 2;
+
+                    out.items.emplace_back(DrawItem(line, z));
+                }
+                else if constexpr (std::is_same_v<T, IconCircle>)
+                {
+                    GuiCircle circle;
+                    circle.center = {int(p.center.first + t.translate.first),
+                                     int(p.center.second + t.translate.second)};
+                    circle.radius = p.radius * t.scale;
+                    circle.isFilled
+
+                    out.items.emplace_back(DrawItem(circle, z));
+                }
+                else if constexpr (std::is_same_v<T, IconRect>)
+                {
+                    GuiRect r;
+                    r. = TransformRect(p.rect, t);
+
+                    out.items.emplace_back(DrawItem(r, z));
+                }
+            },
+            prim);
+    }
+}
+void cpplot2d::Plot2D::DrawActionBar(DrawCommand* DrawCommand, IWindow* window)
+{
+    const WindowRect rect = window->GetRect();
+    DrawCommand->items.emplace_back(DrawItem(
+        GuiRect({rect.left, rect.top}, {rect.right, 30}, Color::Grey(), true, Color::Grey(), 1),
+        ZOrder::Z_OVERLAY));
+
+    GuiPolyline homeButton(homeButtonPts, Color::Black(), 1);
+    // Home button
+    Dimension2d padding(5, 5);
+    Dimension2d buttonSize(20, 20);
+    DrawCommand
 }
 void cpplot2d::Plot2D::DrawBasePlot(DrawCommand* DrawCommand, IWindow* window)
 {
@@ -1926,9 +2058,8 @@ inline void cpplot2d::Plot2D::DrawScatterPlot(DrawCommand* DrawCommand,
 
     // Remove duplicates - big performance boost for very large/dense datasets
     auto it = std::unique(series.transformedPoints.begin(), series.transformedPoints.end(),
-                        [](const Point& a, const Point& b) {
-                            return a.first == b.first && a.second == b.second;
-                        });
+                          [](const Point& a, const Point& b)
+                          { return a.first == b.first && a.second == b.second; });
 
     series.transformedPoints.erase(it, series.transformedPoints.end());
 
@@ -1946,6 +2077,7 @@ void cpplot2d::Plot2D::UpdatePlotDrawCommand(cpplot2d::Plot2D::DrawCommand* Draw
     DrawCommand->items.clear();
 
     DrawBasePlot(DrawCommand, window);
+    DrawActionBar(DrawCommand, window);
     DrawLinePlots(DrawCommand, m_viewportRect, m_dataSeries);
     DrawScatterPlots(DrawCommand, m_viewportRect, m_dataSeries);
 
