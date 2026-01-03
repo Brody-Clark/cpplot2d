@@ -1182,7 +1182,7 @@ class Plot2D
     Dimension2d m_defaultWindowSize = {800, 600};
     PlotProperties m_plotProperties;
     std::vector<ActionButton> m_actionButtons = {};
-    int m_actionBarHeight = 30;
+    const int m_actionBarHeight = 30;
 
 #ifdef CPPLOT2D_HEADLESS  // Null/Headless implementation
     class NullWindow : public cpplot2d::Plot2D::IWindow
