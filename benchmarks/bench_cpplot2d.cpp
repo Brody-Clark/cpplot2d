@@ -63,6 +63,15 @@ class Plot2DBenchmark : public cpplot2d::Plot2D
         {
 
         }
+        void BeginFrame(const WindowRect& dirtyRect, const cpplot2d::Color& color) override
+        {
+
+        }
+        void EndFrame() override
+        {
+
+        }
+
         // Callbacks
         std::function<void(Point)> OnMouseHoverCallback;
         std::function<void()> OnResizeStartCallback;
