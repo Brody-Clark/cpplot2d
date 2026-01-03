@@ -11,7 +11,7 @@ class Plot2DBenchmark : public cpplot2d::Plot2D
         : cpplot2d::Plot2D()
         {
         }
-        void TestDrawLinePlot(DrawCommand* state, const std::vector<float>& x,
+        void TestDrawLinePlot(DrawCommand& state, const std::vector<float>& x,
                                                 const std::vector<float>& y,
                                                 int top, int left, int bottom, int right)
         {
@@ -32,9 +32,6 @@ class Plot2DBenchmark : public cpplot2d::Plot2D
             return {5, 5};
         }
         void InvalidateRegion(const WindowRect& rect) override
-        {
-        }
-        void AddMenuButtons(const std::string menu, MenuButtons menuButtons) override
         {
         }
         void Invalidate() override
@@ -105,7 +102,7 @@ static void BM_GetDataPolyline(benchmark::State& state)
     cpplot2d::detail::GuiPolyline line;
     for (auto _ : state)
     {
-        plot.TestDrawLinePlot(&drawCommand, xs, ys, 600, 20, 20, 400);
+        plot.TestDrawLinePlot(drawCommand, xs, ys, 600, 20, 20, 400);
         //benchmark::DoNotOptimize(poly);
     }
 }
