@@ -502,6 +502,10 @@ extern NSString* const MouseUpNotification = @"MouseUpNotification";
     // Call updateTrackingAreas to ensure tracking is set up once the window is present
     [self updateTrackingAreas];
 }
+- (void)resetCursorRects {
+    [super resetCursorRects];
+    [self addCursorRect:[self bounds] cursor:[NSCursor arrowCursor]];
+}
 - (void)drawGuiRect:(const cpplot2d::detail::GuiRect&)rect color:(NSColor*)color
 {
     NSRect nsRect = NSMakeRect(rect.topLeft.first, rect.bottomRight.second,
@@ -770,10 +774,6 @@ extern NSString* const MouseUpNotification = @"MouseUpNotification";
                                                         object:self
                                                       userInfo:userInfo];
 }
-- (void)resetCursorRects
-{
-    [self addCursorRect:[self bounds] cursor:[NSCursor resizeLeftRightCursor]];
-}
 
 - (void)viewDidChangeBackingProperties
 {
@@ -788,28 +788,33 @@ extern NSString* const MouseUpNotification = @"MouseUpNotification";
 - (void)SaveScreenshot:(const std::string&)fileName
 {
     // Show a save dialog
-    NSSavePanel* savePanel = [NSSavePanel savePanel];
-    NSArray* fileTypes = [NSArray arrayWithObjects:@"png", nil];
-    savePanel.allowedContentTypes = fileTypes;
-
+    // NSSavePanel* savePanel = [NSSavePanel savePanel];
+    // savePanel.allowedFileTypes = @[@"png"];
     NSString* defaultName = [NSString stringWithUTF8String:fileName.c_str()];
-    [savePanel setNameFieldStringValue:defaultName];
+    // [savePanel setNameFieldStringValue:defaultName];
 
-    if ([savePanel runModal] == NSModalResponseOK)
-    {
-        NSURL* saveURL = [savePanel URL];
+    dispatch_async(dispatch_get_main_queue(), ^{
+        NSSavePanel* savePanel = [NSSavePanel savePanel];
+        savePanel.allowedFileTypes = @[@"png"];
+        [savePanel setNameFieldStringValue:defaultName];
 
-        // Render view into an image
-        NSBitmapImageRep* imageRep = [self bitmapImageRepForCachingDisplayInRect:self.bounds];
-        [self cacheDisplayInRect:self.bounds toBitmapImageRep:imageRep];
+        // This blocks the main thread, which is fine for a modal dialog
+        if ([savePanel runModal] == NSModalResponseOK)
+        {
+            NSURL* saveURL = [savePanel URL];
 
-        // Convert to PNG data
-        NSData* pngData =
-            [imageRep representationUsingType:NSBitmapImageFileTypePNG properties:@{}];
+            // Render view into an image
+            NSBitmapImageRep* imageRep = [self bitmapImageRepForCachingDisplayInRect:self.bounds];
+            [self cacheDisplayInRect:self.bounds toBitmapImageRep:imageRep];
 
-        // Write to file
-        [pngData writeToURL:saveURL atomically:YES];
-    }
+            // Convert to PNG data
+            NSData* pngData =
+                [imageRep representationUsingType:NSBitmapImageFileTypePNG properties:@{}];
+
+            // Write to file
+            [pngData writeToURL:saveURL atomically:YES];
+        }
+    });
 }
 @end
 // NOLINTEND(readability-*, modernize-*, bugprone-*)
@@ -1691,7 +1696,7 @@ void cpplot2d::Plot2D::DrawActionBar(DrawCommand& drawCommand, IWindow* window)
 {
     const WindowRect rect = window->GetRect();
     const WindowRect actionBarRect = GetActionBarRect(*window);
-    
+
     // Draw action bar background
     drawCommand.items.emplace_back(DrawItem(GuiRect({actionBarRect.left, actionBarRect.top},
                          {actionBarRect.right, actionBarRect.bottom},
@@ -3209,7 +3214,9 @@ cpplot2d::Plot2D::IWindow* Plot2D::CocoaGraphicsContext::MakeWindow(Color color,
 {
     auto window = new Plot2D::CocoaWindow(defaultSize, Dimension2d(0, 0), title, color);
     NSApplication* app = [NSApplication sharedApplication];
+    [app setActivationPolicy:NSApplicationActivationPolicyRegular];
     [app finishLaunching];  // Ensure app is fully launched
+    [app activateIgnoringOtherApps:YES];
     return window;
 }
 
