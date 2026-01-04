@@ -126,7 +126,7 @@ inline void cpplot2d_debug_impl(
 namespace cpplot2d
 {
 // Color struct representing RGBA color values.
-struct Color
+struct Color final
 {
     uint8_t r = 0;
     uint8_t g = 0;
@@ -225,7 +225,7 @@ enum Alignment : uint8_t
     CENTER = 2
 };
 
-struct WindowRect
+struct WindowRect final
 {
    public:
     WindowRect(int top, int left, int right, int bottom)
@@ -257,7 +257,7 @@ struct WindowRect
     int bottom = 0;
 };
 
-struct WindowRectf
+struct WindowRectf final
 {
    public:
     WindowRectf(float top, float left, float right, float bottom)
@@ -290,7 +290,7 @@ struct WindowRectf
 };
 
 // Represents a polyline to be drawn in the window. More efficient than multiple lines.
-struct GuiPolyline
+struct GuiPolyline final
 {
    public:
     GuiPolyline(const std::vector<Point>& points = {}, Color c = Color::Green(),
@@ -304,7 +304,7 @@ struct GuiPolyline
 };
 
 // Represents a single line to be drawn in the window
-struct GuiLine
+struct GuiLine final
 {
    public:
     GuiLine(Point p1, Point p2, Color c, uint8_t thickness = 1) : p1(p1), p2(p2), color(c), thickness(thickness)
@@ -318,7 +318,7 @@ struct GuiLine
 };
 
 // Represents a text entry to be drawn in the window
-struct GuiText
+struct GuiText final
 {
    public:
     GuiText(const std::string& text, const Point pos, const Color& color, Orientation orientation,
@@ -343,7 +343,7 @@ struct GuiText
 };
 
 // Represents a rectangle to be drawn in the window
-struct GuiRect
+struct GuiRect final
 {
    public:
     GuiRect(Point topLeft, Point bottomRight, Color borderColor, bool isFilled = false,
@@ -366,7 +366,7 @@ struct GuiRect
 };
 
 // Represents a circle to be drawn in the window
-struct GuiCircle
+struct GuiCircle final
 {
    public:
     GuiCircle(Point center = {-1, -1}, uint8_t radius = 1, bool isFilled = true, Color fillColor = Color::Green(), uint8_t borderThickness = 1)
@@ -382,7 +382,7 @@ struct GuiCircle
 };
 
 // Represents a series of filled cirlces with shared radii and color.
-struct GuiPointCloud
+struct GuiPointCloud final
 {
    public:
     GuiPointCloud(const std::vector<Point>& points = {}, Color color = Color::Green(),
@@ -396,7 +396,7 @@ struct GuiPointCloud
     uint8_t radius = 1;
 };
 
-struct ClipRect
+struct ClipRect final
 {
    public:
     ClipRect() = default;
@@ -424,7 +424,7 @@ enum ZOrder : uint8_t
     Z_ACTIONBAR_TEXT = 90,
     Z_DEBUG_OVERLAY = 255
 };
-struct DrawItem
+struct DrawItem final
 {
    public:
     DrawItem(const DrawPayload& payload = {}, const ZOrder& z = Z_BACKGROUND,
@@ -438,7 +438,7 @@ struct DrawItem
 };
 
 // Represents a series of draw items to be executed in the window
-struct DrawCommand
+struct DrawCommand final
 {
     Color background = Color::Black();
     std::vector<DrawItem> items = {};
@@ -799,7 +799,7 @@ namespace cpplot2d
 {
 
 // Plot appearance properties
-struct PlotProperties
+struct PlotProperties final
 {
    public:
     Color backgroundColor = Color::Black();
@@ -815,7 +815,7 @@ struct PlotProperties
 class Plot2DTestAccessor;
 #endif
 
-class Plot2D
+class Plot2D final
 {
    public:
     Plot2D(std::string title = "", std::string m_xLabel = "", std::string m_yLabel = "",
