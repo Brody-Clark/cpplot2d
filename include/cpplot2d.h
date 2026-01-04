@@ -466,34 +466,9 @@ typedef cpplot2d::detail::DrawCommand DrawCommand;
 @property(nonatomic, assign) std::map<cpplot2d::Color, NSColor*>* colorMap;
 @end
 extern NSString* const MouseMovedNotification = @"MouseMovedNotification";
+extern NSString* const MouseDownNotification = @"MouseDownNotification";
+extern NSString* const MouseUpNotification = @"MouseUpNotification";
 
-@interface MenuCallbackBridge : NSObject
-{
-    std::function<void()> _callback;
-}
-- (instancetype)initWithCallback:(std::function<void()>)callback;
-- (void)invokeCallback:(id)sender;
-@end
-
-@implementation MenuCallbackBridge
-- (instancetype)initWithCallback:(std::function<void()>)callback
-{
-    self = [super init];
-    if (self)
-    {
-        _callback = callback;
-    }
-    return self;
-}
-
-- (void)invokeCallback:(id)sender
-{
-    if (_callback)
-    {
-        _callback();
-    }
-}
-@end
 // Window delegate to handle close event
 @interface WindowDelegate : NSObject <NSWindowDelegate>
 @end
@@ -533,9 +508,18 @@ extern NSString* const MouseMovedNotification = @"MouseMovedNotification";
                                rect.bottomRight.first - rect.topLeft.first,
                                rect.topLeft.second - rect.bottomRight.second);
     NSBezierPath* path = [NSBezierPath bezierPathWithRect:nsRect];
+    if (rect.isFilled)
+    {
+        [color setFill];
+        [path fill];
+    }
+    else
+    {
+        [color setStroke];
+        [path setLineWidth:rect.borderWidth];
+        [path stroke];
+    }
 
-    [color setStroke];
-    [path stroke];
 }
 - (NSFont*)getFontWithName:(NSString*)fontName size:(int)size
 {
@@ -643,6 +627,7 @@ extern NSString* const MouseMovedNotification = @"MouseMovedNotification";
 
     NSBezierPath* path = [NSBezierPath bezierPath];
     [path moveToPoint:start];
+    [path setLineWidth:line.thickness];
     [path lineToPoint:end];
 
     [path stroke];
@@ -676,7 +661,7 @@ extern NSString* const MouseMovedNotification = @"MouseMovedNotification";
     }
 
     [color setStroke];
-    [path setLineWidth:2.0];
+    [path setLineWidth:polyline.thickness];
     [path stroke];
 }
 - (void)drawGuiPointCloud:(const cpplot2d::detail::GuiPointCloud&)pointcloud color:(NSColor*)color
@@ -699,6 +684,14 @@ extern NSString* const MouseMovedNotification = @"MouseMovedNotification";
     [path appendBezierPathWithOvalInRect:NSMakeRect(circle.center.first - circle.radius,
                                                     circle.center.second - circle.radius,
                                                     circle.radius * 2, circle.radius * 2)];
+
+    if(!circle.isFilled)
+    {
+        [color setStroke];
+        [path setLineWidth:circle.borderThickness];
+        [path stroke];
+        return;
+    }
     [color setFill];
     [path fill];
 }
@@ -738,6 +731,34 @@ extern NSString* const MouseMovedNotification = @"MouseMovedNotification";
                                     userInfo:nil];
     [self addTrackingArea:trackingArea];
     self.trackingArea = trackingArea;
+}
+- (void)mouseDown:(NSEvent*)event
+{
+    NSPoint location = [self convertPoint:event.locationInWindow fromView:nil];
+
+    // Post notification with mouse position
+    NSDictionary* userInfo = @{@"x" : @(location.x), @"y" : @(location.y)};
+    [[NSNotificationCenter defaultCenter] postNotificationName:MouseDownNotification
+                                                        object:self
+                                                      userInfo:userInfo];
+}
+- (void)mouseUp:(NSEvent*)event
+{
+    NSPoint location = [self convertPoint:event.locationInWindow fromView:nil];
+
+    // Post notification with mouse position
+    NSDictionary* userInfo = @{@"x" : @(location.x), @"y" : @(location.y)};
+    [[NSNotificationCenter defaultCenter] postNotificationName:MouseUpNotification
+                                                        object:self
+                                                      userInfo:userInfo];
+}
+- (void)mouseDragged:(NSEvent*)event {
+    NSPoint location = [self convertPoint:event.locationInWindow fromView:nil];
+    NSDictionary* userInfo = @{@"x" : @(location.x), @"y" : @(location.y)};
+    
+    [[NSNotificationCenter defaultCenter] postNotificationName:MouseMovedNotification
+                                                        object:self
+                                                      userInfo:userInfo];
 }
 - (void)mouseMoved:(NSEvent*)event
 {
@@ -1428,7 +1449,6 @@ class Plot2D final
         ~CocoaWindow() override;
 
         Dimension2d GetAverageCharSize() override;
-        void AddMenuButtons(const std::string menu, MenuButtons menuButtons) override;
         void SetIsVisible(bool isVisible) override;
         void Invalidate() override;
         std::string GetTimestamp() override;
@@ -1440,6 +1460,8 @@ class Plot2D final
         void ProcessEvents() override;
         void ApplyClip(const ClipRect& clip) override;
         void RestoreClip(const ClipRect* clip) override;
+        void BeginFrame(const WindowRect& dirtyRect, const Color& color) override;
+        void EndFrame() override;
         void Draw(const DrawCommand& state) override;
 
        protected:
@@ -1461,7 +1483,6 @@ class Plot2D final
         void* m_mouseUpObserver;
         std::function<void()> m_drawCallback = nullptr;
         WindowRect m_invalidatedRect;
-        std::vector<void*> m_menuCallbacks = {};
         std::map<Color, void*> m_colorMap = {};
 
         void OnMouseLButtonDown(int x, int y);
@@ -3321,13 +3342,6 @@ inline void Plot2D::CocoaWindow::OnMouseLButtonUp(int x, int y)
 
 inline Plot2D::CocoaWindow::~CocoaWindow()
 {
-    for (void* bridge : m_menuCallbacks)
-    {
-        MenuCallbackBridge* mbridge = (MenuCallbackBridge*)bridge;
-        [mbridge release];
-    }
-    m_menuCallbacks.clear();
-
     NSWindow* window = reinterpret_cast<NSWindow*>(m_nsWindow);
     [window release];
 
@@ -3364,36 +3378,6 @@ cpplot2d::Plot2D::Dimension2d Plot2D::CocoaWindow::GetAverageCharSize()
     return {textSize.width / sampleText.length, textSize.height};
 }
 
-void Plot2D::CocoaWindow::AddMenuButtons(const std::string menu, MenuButtons menuButtons)
-{
-    NSString* menuTitle = [NSString stringWithUTF8String:menu.c_str()];
-    NSMenu* mainMenu = reinterpret_cast<NSMenu*>(m_mainMenu);
-
-    // Create the top-level menu item
-    NSMenuItem* menuItem =
-        [[NSMenuItem alloc] initWithTitle:menuTitle action:nil keyEquivalent:@""];
-    [mainMenu addItem:menuItem];
-
-    NSMenu* submenu = [[NSMenu alloc] initWithTitle:menuTitle];
-    [menuItem setSubmenu:submenu];
-
-    // Add buttons to the menu
-    for (const auto& pair : menuButtons)
-    {
-        NSString* itemTitle = [NSString stringWithUTF8String:pair.first.c_str()];
-        NSMenuItem* subItem = [[NSMenuItem alloc] initWithTitle:itemTitle
-                                                         action:@selector(invokeCallback:)
-                                                  keyEquivalent:@""];
-
-        // Create a MenuCallbackBridge and store it as void*
-        MenuCallbackBridge* bridge = [[MenuCallbackBridge alloc] initWithCallback:pair.second];
-        m_menuCallbacks.push_back(reinterpret_cast<void*>(bridge));
-
-        // Set the bridge as the target
-        [subItem setTarget:bridge];
-        [submenu addItem:subItem];
-    }
-}
 void Plot2D::CocoaWindow::SetIsVisible(bool isVisible)
 {
     NSWindow* window = reinterpret_cast<NSWindow*>(m_nsWindow);
@@ -3435,19 +3419,24 @@ void cpplot2d::Plot2D::CocoaWindow::RestoreClip(const ClipRect* clip)
 {
     [NSGraphicsContext restoreGraphicsState];
 }
+inline void cpplot2d::Plot2D::CocoaWindow::BeginFrame(const WindowRect& dirtyRect,
+                                                    const Color& color)
+{
+    NSColor* nsColor = static_cast<NSColor*>(GetNSColorFromColor(color));
+    WindowView* view = reinterpret_cast<WindowView*>(m_windowView);
+    NSRect nsRect = NSMakeRect(dirtyRect.left,                    // x origin
+                               dirtyRect.bottom,                  // y origin
+                               dirtyRect.right - dirtyRect.left,  // width
+                               dirtyRect.top - dirtyRect.bottom   // height
+    );
+    [view drawBackground:nsColor inRect:nsRect];
+}
+inline void cpplot2d::Plot2D::CocoaWindow::EndFrame()
+{
+    // No specific end frame actions needed for Cocoa
+}
 inline void cpplot2d::Plot2D::CocoaWindow::Draw(const DrawCommand& state)
 {
-    // Draw background first
-    NSColor* color = static_cast<NSColor*>(GetNSColorFromColor(state.background));
-    WindowView* view = reinterpret_cast<WindowView*>(m_windowView);
-    NSRect nsRect = NSMakeRect(m_invalidatedRect.left,                            // x origin
-                               m_invalidatedRect.bottom,                          // y origin
-                               m_invalidatedRect.right - m_invalidatedRect.left,  // width
-                               m_invalidatedRect.top - m_invalidatedRect.bottom   // height
-    );
-    [view drawBackground:color inRect:nsRect];
-
-    // Draw all items
     ClipStack clipStack(*this);
     for (const DrawItem& item : state.items)
     {
