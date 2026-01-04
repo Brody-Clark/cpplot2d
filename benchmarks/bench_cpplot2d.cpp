@@ -1,122 +1,50 @@
 #include <benchmark/benchmark.h>
 #define CPPLOT2D_IMPLEMENTATION
+#define CPPLOT2D_HEADLESS
+#define CPPLOT2D_TEST
 #include "cpplot2d.h"
 
-
-class Plot2DBenchmark : public cpplot2d::Plot2D
+namespace cpplot2d
 {
-    public:
-        Plot2DBenchmark(const std::vector<float>& x, const std::vector<float>& y,
-                    const std::string& title = "Plot")
-        : cpplot2d::Plot2D()
-        {
-        }
-        void TestDrawLinePlot(DrawCommand& state, const std::vector<float>& x,
-                                                const std::vector<float>& y,
-                                                int top, int left, int bottom, int right)
-        {
-            LineSeries series(x, y, cpplot2d::Color::Black(), 1);
-            DrawLinePlot(state, WindowRect(top, left, bottom, right), series);
-        }
-
-    // Minimal mock window implementation
-    class MockWindow : public cpplot2d::Plot2D::IWindow
+    class Plot2DTestAccessor
     {
        public:
-        MockWindow(int width, int height) : m_width(width), m_height(height)
-        {
-        }
+           using Point = Plot2D::Point;
+           using WindowRect = Plot2D::WindowRect;
 
-        Dimension2d GetAverageCharSize() override
+        static const Plot2D::DrawCommand& GetDrawCommand(const Plot2D& plot)
         {
-            return {5, 5};
+            return plot.m_plotDrawCommand;
         }
-        void InvalidateRegion(const WindowRect& rect) override
+        static Plot2D::IWindow* GetWindow(const Plot2D& plot)
         {
+            return plot.m_window.get();
         }
-        void Invalidate() override
+        static bool GetIsDirty(const Plot2D& plot)
         {
+            return plot.m_plotDirty;
         }
-        bool SaveScreenshot(const std::string& fileName) override
+        static bool DoPointsIntersectRect(const Plot2D::Point& p1, const Plot2D::Point& p2,
+                                          const Plot2D::WindowRect& rect, Plot2D& plot)
         {
-            return false;
+            return plot.DoPointsIntersectRect(p1, p2, rect);
         }
-        void SetIsVisible(bool isVisible) override
-        {
-        }
-        std::string GetTimestamp() override
-        {
-            return "ts";
-        }
-        WindowRect GetRect() override
-        {
-            return WindowRect(m_height, 0, m_width, 0);
-        }
-        void RunEventLoop() override
-        {
-        }
-        void ProcessEvents() override 
-        {
-
-        }
-        void Draw(const DrawCommand& state) override
-        {
-
-        }
-        void BeginFrame(const WindowRect& dirtyRect, const cpplot2d::Color& color) override
-        {
-
-        }
-        void EndFrame() override
-        {
-
-        }
-
-        // Callbacks
-        std::function<void(Point)> OnMouseHoverCallback;
-        std::function<void()> OnResizeStartCallback;
-        std::function<void()> OnResizeEndCallback;
-        std::function<void()> OnResizeCallback;
-
-        protected:
-        void Draw(const GuiRect& rect) override{}
-        void Draw(const GuiLine& line) override{}
-        void Draw(const GuiCircle& circle) override{}
-        void Draw(const GuiText& text) override{}
-        void Draw(const GuiPolyline& polyline) override{}
-        void Draw(const GuiPointCloud& pointcloud) override{}
-
-       private:
-        int m_width;
-        int m_height;
     };
 };
 
-static void BM_GetDataPolyline(benchmark::State& state)
+static void BM_DoPointsIntersectRect(benchmark::State& state)
 {
-    const int N = static_cast<int>(state.range(0));
-
-    // Prepare inputs and Plot2D instance outside timed section
-    std::vector<float> xs(N), ys(N);
-    for (int i = 0; i < N; ++i)
-    {
-        xs[i] = static_cast<float>(i);
-        ys[i] = static_cast<float>(i % 100);
-    }
-
-    cpplot2d::detail::DrawCommand drawCommand;
-    // Construct Plot
-    Plot2DBenchmark plot(xs, ys, "benchmark_plot");
-    Plot2DBenchmark::MockWindow mockWindow(800, 600);
-    cpplot2d::detail::GuiPolyline line;
+    cpplot2d::Plot2D plot;
     for (auto _ : state)
     {
-        plot.TestDrawLinePlot(drawCommand, xs, ys, 600, 20, 20, 400);
-        //benchmark::DoNotOptimize(poly);
+        bool hit = cpplot2d::Plot2DTestAccessor::DoPointsIntersectRect(
+            cpplot2d::Plot2DTestAccessor::Point{10, 10}, {60, 10},
+            cpplot2d::Plot2DTestAccessor::WindowRect(30, 25, 50, 5), plot);
+        benchmark::DoNotOptimize(hit);
     }
+
 }
 
-// Register benchmark with a few sizes
-BENCHMARK(BM_GetDataPolyline)->Arg(100)->Arg(10000)->Arg(100000)->Arg(1000000);
+BENCHMARK(BM_DoPointsIntersectRect);
 
 BENCHMARK_MAIN();

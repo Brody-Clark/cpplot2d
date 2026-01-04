@@ -1,5 +1,6 @@
 #include <catch2/catch_test_macros.hpp>
 #define CPPLOT2D_IMPLEMENTATION
+#define CPPLOT2D_TEST
 #include "../../include/cpplot2d.h"
 
 static void GetStraightDataset(std::vector<float>& x,std::vector<float>& y, int size)
