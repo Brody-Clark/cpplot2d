@@ -1193,7 +1193,7 @@ class Plot2D final
     void GetTransformedPoint(const WindowRect& viewport, const WindowRectf& dataView,
                              const Dimension2df& scales, const Pointf& point, Point& out);
     void UpdatePlotDrawCommand(DrawCommand& drawCommand, IWindow* window);
-    void DrawBasePlot(DrawCommand& v, IWindow* window);
+    void DrawBasePlot(DrawCommand& drawCommand, IWindow* window);
     void DrawActionBar(DrawCommand& drawCommand, IWindow* window);
     void DrawLinePlots(DrawCommand& drawCommand, const WindowRect& viewportRect,
                        DataSeries& dataSeries);
