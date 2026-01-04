@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.15)
-project(ccplot2d LANGUAGES CXX)
+project(cpplot2d LANGUAGES CXX)
 
 # Only enable OBJCXX if we are on an Apple platform
 if (APPLE)
