@@ -1,7 +1,8 @@
 cmake_minimum_required(VERSION 3.15)
 project(cpplot2d LANGUAGES CXX)
+SET(CMAKE_CXX_STANDARD 17)
 
-# Only enable OBJCXX if we are on an Apple platform
+# Only enable OBJCXX if on an Apple platform
 if (APPLE)
     enable_language(OBJCXX)
 endif()
@@ -16,7 +17,6 @@ target_include_directories(cpplot2d INTERFACE
     ${CMAKE_CURRENT_SOURCE_DIR}/include
 )
 
-# Require C++17 or higher
 target_compile_features(cpplot2d INTERFACE cxx_std_17)
 
 # === Fetch Catch2 for tests ===

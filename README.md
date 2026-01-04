@@ -102,10 +102,10 @@ cl main.cpp user32.lib gdi32.lib
 
 ### macOS (Cocoa/Quartz)
 
-As noted in the Usage section, macOS requires the Objective-C++ compiler (`clang++`) and linking against the `Cocoa` and `QuartzCore` frameworks. Ensure your implementation file has a `.mm` extension.
+As noted in the Usage section, macOS requires the Objective-C++ compiler (`clang++`) and linking against the `Cocoa` and `CoreGraphics` frameworks. Ensure your implementation file has a `.mm` extension.
 
 ```bash
-clang++ main.mm -framework Cocoa -framework QuartzCore -o my_plot
+clang++ main.mm -framework Cocoa -framework CoreGraphics -o my_plot
 ```
 
 ## Examples
