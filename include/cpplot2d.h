@@ -1134,13 +1134,20 @@ class Plot2D final
         ACTION_BAR = 1
     };
 
+    struct Layout {
+        uint16_t actionBarHeight = 30;
+        uint8_t actionBarButtonSpacing = 5;
+        float viewportMarginFactor = 0.125f;
+        Dimension2d actionBarButtonSize = {70, 20};
+        uint8_t tickCount = 5;
+        uint8_t tickLength = 4;
+    } m_layout;
+
     static std::unique_ptr<IGraphicsContext> m_graphicsContext;
     std::unique_ptr<IWindow> m_window = nullptr;
 
     // State representing what to draw in the plot window
     DrawCommand m_plotDrawCommand;
-    // Separate state for mouse coordinates to avoid redrawing everything
-    DrawCommand m_coordinateViewState;
 
     void Initialize();
     void DoAddLine(const std::vector<float>& xf, const std::vector<float>& yf,
@@ -1208,16 +1215,13 @@ class Plot2D final
     WindowRectf m_defaultView;                             // dataBounds + padding
     WindowRectf m_view;                                    // current view state
     Dimension2d m_charSize = {5, 5};
-    static constexpr float m_plotBorderOffsetFactor = 0.125f;
     std::string m_xLabel = "";
     std::string m_yLabel = "";
     std::string title = "";
     Dimension2d m_mouseCoordinateRectOffset = {200, 15};
-    static constexpr int m_tickLength = 4;
     Dimension2d m_defaultWindowSize = {800, 600};
     PlotProperties m_plotProperties;
     std::vector<ActionButton> m_actionButtons = {};
-    const int m_actionBarHeight = 30;
 
 #ifdef CPPLOT2D_HEADLESS  // Null/Headless implementation
     class NullWindow : public cpplot2d::Plot2D::IWindow
@@ -1683,38 +1687,37 @@ inline cpplot2d::Plot2D::WindowRectf cpplot2d::Plot2D::PadRect(const WindowRectf
     return WindowRectf(r.top + dy, r.left - dx, r.right + dx, r.bottom - dy);
 }
 
-// TODO: CLEANUP
 void cpplot2d::Plot2D::DrawActionBar(DrawCommand& drawCommand, IWindow* window)
 {
     const WindowRect rect = window->GetRect();
     const WindowRect actionBarRect = GetActionBarRect(*window);
+    
     // Draw action bar background
     drawCommand.items.emplace_back(DrawItem(GuiRect({actionBarRect.left, actionBarRect.top},
                          {actionBarRect.right, actionBarRect.bottom},
                 Color(40, 49, 148), true, Color::Grey(), 1),
         ZOrder::Z_OVERLAY));
 
-    Dimension2d actionButtonSize{70, 20};
+    Dimension2d actionButtonSize = m_layout.actionBarButtonSize;
 
     // Action buttons
-    int padding = 8;
+    int padding = m_layout.actionBarButtonSpacing;
     int x = padding; // Start with padding
-    int y = 5;
+    int y = (m_layout.actionBarHeight - actionButtonSize.second) / 2;
     WindowRect buttonRect;
+    buttonRect.top = rect.top - y; // Button rects are the same veritcally
+    buttonRect.bottom = buttonRect.top - actionButtonSize.second;
     Point textOrigin;
+    textOrigin.second = buttonRect.bottom + buttonRect.Height() / 2 - m_charSize.second / 2; // Vertically center text
     for (ActionButton& button : m_actionButtons)
     { 
         buttonRect.left = x + padding;
         buttonRect.right = x + actionButtonSize.first;
-        buttonRect.top = rect.top - y;
-        buttonRect.bottom = buttonRect.top - actionButtonSize.second;
 
         button.rect = buttonRect;
 
-        // Button text
         textOrigin.first = buttonRect.left + buttonRect.Width() / 2;
-        textOrigin.second = buttonRect.bottom + buttonRect.Height() / 2 - m_charSize.second /2;
-         
+
         drawCommand.items.emplace_back(DrawItem(
         GuiText(button.label, textOrigin, Color(251, 250, 248), Orientation::HORIZONTAL, 10, m_font, Alignment::CENTER),
         ZOrder::Z_ACTIONBAR_TEXT));
@@ -1770,35 +1773,35 @@ void cpplot2d::Plot2D::DrawBasePlot(DrawCommand& drawCommand, IWindow* window)
     float offset = view.left;
     int tickInterval = (rightBorderPos - leftBorderPos) / (numTicksX + 1);
     float increment = view.Width() / static_cast<float>(numTicksX + 1);
-
+    const int tickLength = m_layout.tickLength;
     for (int i = 1; i <= numTicksX; ++i)
     {
         x = leftBorderPos + i * tickInterval;
         offset += increment;
 
         drawCommand.items.emplace_back(
-            DrawItem(GuiLine({x, bottomBorderPos + m_tickLength},
-                             {x, bottomBorderPos - m_tickLength}, textColor),
+            DrawItem(GuiLine({x, bottomBorderPos + tickLength},
+                             {x, bottomBorderPos - tickLength}, textColor),
                      ZOrder::Z_AXES));
 
         label.str("");
         label << std::setprecision(3) << offset;
         drawCommand.items.emplace_back(DrawItem(
             GuiText(label.str(),
-                    {x - charSize.first * 3, bottomBorderPos - m_tickLength - charSize.second},
+                    {x - charSize.first * 3, bottomBorderPos - tickLength - charSize.second},
                     textColor, Orientation::HORIZONTAL, 10, font),
             ZOrder::Z_LABELS));
     }
     drawCommand.items.emplace_back(
-        DrawItem(GuiLine({rightBorderPos, bottomBorderPos + m_tickLength},
-                         {rightBorderPos, bottomBorderPos - m_tickLength}, textColor),
+        DrawItem(GuiLine({rightBorderPos, bottomBorderPos + tickLength},
+                         {rightBorderPos, bottomBorderPos - tickLength}, textColor),
                  ZOrder::Z_AXES));
     label.str("");
     label << std::setprecision(3) << offset + increment;
     drawCommand.items.emplace_back(DrawItem(
         GuiText(
             label.str(),
-            {rightBorderPos - charSize.first * 3, bottomBorderPos - m_tickLength - charSize.second},
+            {rightBorderPos - charSize.first * 3, bottomBorderPos - tickLength - charSize.second},
             textColor, Orientation::HORIZONTAL, 10, font),
         ZOrder::Z_LABELS));
 
@@ -1815,7 +1818,7 @@ void cpplot2d::Plot2D::DrawBasePlot(DrawCommand& drawCommand, IWindow* window)
         offset += increment;
 
         drawCommand.items.emplace_back(
-            DrawItem(GuiLine({leftBorderPos - m_tickLength, y}, {leftBorderPos + m_tickLength, y},
+            DrawItem(GuiLine({leftBorderPos - tickLength, y}, {leftBorderPos + tickLength, y},
                              textColor),
                      ZOrder::Z_AXES));
 
@@ -1823,20 +1826,20 @@ void cpplot2d::Plot2D::DrawBasePlot(DrawCommand& drawCommand, IWindow* window)
         label << std::setprecision(3) << offset;
         drawCommand.items.emplace_back(
             DrawItem(GuiText(label.str(),
-                             Point({std::max(10, leftBorderPos - charSize.first - m_tickLength),
+                             Point({std::max(10, leftBorderPos - charSize.first - tickLength),
                                     y - (int)(0.5 * charSize.second)}),
                              textColor, Orientation::HORIZONTAL, 10, font, Alignment::RIGHT),
                      ZOrder::Z_LABELS));
     }
     drawCommand.items.emplace_back(
-        DrawItem(GuiLine({leftBorderPos - m_tickLength, topBorderPos},
-                         {leftBorderPos + m_tickLength, topBorderPos}, textColor),
+        DrawItem(GuiLine({leftBorderPos - tickLength, topBorderPos},
+                         {leftBorderPos + tickLength, topBorderPos}, textColor),
                  ZOrder::Z_AXES));
     label.str("");
     label << std::setprecision(3) << offset + increment;
     drawCommand.items.emplace_back(
         DrawItem(GuiText(label.str(),
-                         Point({std::max(10, int(leftBorderPos - charSize.first - m_tickLength)),
+                         Point({std::max(10, int(leftBorderPos - charSize.first - tickLength)),
                                 topBorderPos - (int)(0.5 * charSize.second)}),
                          textColor, Orientation::HORIZONTAL, 10, font, Alignment::RIGHT),
                  ZOrder::Z_LABELS));
@@ -2122,9 +2125,9 @@ void cpplot2d::Plot2D::OnWindowResizeCallback(IWindow& window)
 {
     Dimension2d size = window.GetRect().Size();
     int verticalOffset =
-        static_cast<int>(static_cast<float>(size.second) * m_plotBorderOffsetFactor);
+        static_cast<int>(static_cast<float>(size.second) * m_layout.viewportMarginFactor);
     int horizontalOffset =
-        static_cast<int>(static_cast<float>(size.first) * m_plotBorderOffsetFactor);
+        static_cast<int>(static_cast<float>(size.first) * m_layout.viewportMarginFactor);
     m_viewportRect = WindowRect(size.second - verticalOffset, horizontalOffset,
                                 size.first - horizontalOffset, verticalOffset);
 
@@ -2259,7 +2262,7 @@ void cpplot2d::Plot2D::HandleMouseHover(IWindow& w, Point mousePos)
 
 void cpplot2d::Plot2D::OnMouseLButtonDownCallback(IWindow& w, Point mousePos)
 {
-    if(mousePos.second > w.GetRect().top - m_actionBarHeight)
+    if(mousePos.second > w.GetRect().top - m_layout.actionBarHeight)
     {
         for (ActionButton button : m_actionButtons)
         {
@@ -2355,7 +2358,7 @@ void cpplot2d::Plot2D::OnToggleZoomClicked(IWindow& w)
 inline cpplot2d::Plot2D::WindowRect cpplot2d::Plot2D::GetActionBarRect(IWindow& w)
 {
     WindowRect r = w.GetRect();
-    return {r.top, r.left, r.right, r.top - m_actionBarHeight};
+    return {r.top, r.left, r.right, r.top - m_layout.actionBarHeight};
 }
 void cpplot2d::Plot2D::OnToggleGrabClicked(IWindow& w)
 {
