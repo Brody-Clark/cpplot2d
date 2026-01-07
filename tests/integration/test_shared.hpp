@@ -25,9 +25,12 @@ TEST_CASE("Small Scatter Plots", "[integration][performance][scatter][small]")
     GetStraightDataset(x, y, 2);
     GetStraightDataset(x2, y2, 2);
     
-    cpplot2d::Plot2D plot("small", "Test X", "Test Y");
-    plot.AddPoints(x, y, cpplot2d::Color::FromRGB(0, 255, 0))
-        .AddPoints(x2, y2, cpplot2d::Color::FromRGB(255, 0, 0), 3);
+    cpplot2d::ScatterStyle style1;
+    style1.radius = 3;
+    cpplot2d::PlotProperties props;
+    props.theme = cpplot2d::Theme::Dark();
+    cpplot2d::Plot2D plot("small", "Test X", "Test Y", props);
+    plot.AddPoints(x, y, style1);
     plot.Show();
 }
 TEST_CASE("Medium Scatter Plots", "[integration][performance][scatter][medium]")
@@ -40,9 +43,12 @@ TEST_CASE("Medium Scatter Plots", "[integration][performance][scatter][medium]")
     GetStraightDataset(x, y, 20000);
     GetStraightDataset(x2, y2, 20000);
     
+        
+    cpplot2d::ScatterStyle style1;
+    style1.radius = 3;
     cpplot2d::Plot2D plot("medium", "Test X", "Test Y");
-    plot.AddPoints(x, y, cpplot2d::Color::FromRGB(0, 255, 0))
-        .AddPoints(x2, y2, cpplot2d::Color::FromRGB(255, 0, 0), 3);
+    plot.AddPoints(x, y)
+        .AddPoints(x2, y2, style1);
     plot.Show();
 }
 TEST_CASE("Large Scatter Plots", "[integration][performance][scatter][large]")
@@ -56,8 +62,8 @@ TEST_CASE("Large Scatter Plots", "[integration][performance][scatter][large]")
     GetStraightDataset(x2, y2, 2000000);
     
     cpplot2d::Plot2D plot("large", "Test X", "Test Y");
-    plot.AddPoints(x, y, cpplot2d::Color::FromRGB(0, 255, 0))
-        .AddPoints(x2, y2, cpplot2d::Color::FromRGB(255, 0, 0), 3);
+    plot.AddPoints(x, y)
+        .AddPoints(x2, y2);
     plot.Show();
 }
 TEST_CASE("Small Line Plots", "[integration][performance][line][small]")
@@ -72,8 +78,8 @@ TEST_CASE("Small Line Plots", "[integration][performance][line][small]")
     
     
     cpplot2d::Plot2D plot("small", "Test X", "Test Y");
-    plot.AddLine(x, y, cpplot2d::Color::FromRGB(0, 255, 0))
-        .AddLine(x2, y2, cpplot2d::Color::FromRGB(255, 0, 0));
+    plot.AddLine(x, y)
+        .AddLine(x2, y2);
     plot.Show();
 }
 TEST_CASE("Medium Line Plots", "[integration][performance][line][medium]")
@@ -88,8 +94,8 @@ TEST_CASE("Medium Line Plots", "[integration][performance][line][medium]")
     
 
     cpplot2d::Plot2D plot("medium", "Test X", "Test Y");
-    plot.AddLine(x, y, cpplot2d::Color::FromRGB(0, 255, 0))
-        .AddLine(x2, y2, cpplot2d::Color::FromRGB(255, 0, 0));
+    plot.AddLine(x, y)
+        .AddLine(x2, y2);
     plot.Show();
 }
 
@@ -105,7 +111,7 @@ TEST_CASE("Large Line Plots", "[integration][performance][line][large]")
     
     
     cpplot2d::Plot2D plot("large", "Test X", "Test Y");
-    plot.AddLine(x, y, cpplot2d::Color::FromRGB(0, 255, 0))
-        .AddLine(x2, y2, cpplot2d::Color::FromRGB(255, 0, 0));
+    plot.AddLine(x, y)
+        .AddLine(x2, y2);
     plot.Show();
 }
