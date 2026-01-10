@@ -141,9 +141,13 @@ struct Color final
     {
         return {255, 255, 255};
     }
+    static constexpr Color LightGrey()
+    {
+        return {210, 210, 210};
+    }
     static constexpr Color Grey()
     {
-        return {161, 161, 161};
+        return {95, 95, 95};
     }
     static constexpr Color DarkGrey()
     {
@@ -160,6 +164,14 @@ struct Color final
     static constexpr Color Blue()
     {
         return {0, 0, 255};
+    }
+    static constexpr Color Cyan()
+    {
+        return {0, 255, 255};
+    }
+    static constexpr Color DarkBlue()
+    {
+        return {0, 0, 170};
     }
     static constexpr Color Yellow()
     {
@@ -198,14 +210,14 @@ namespace detail
 // 2D integer points (x, y)
 using Point = std::pair<int, int>;
 
-// 2D float points (x, y)
-using Pointf = std::pair<float, float>;
+// 2D double points (x, y)
+using Pointd = std::pair<double, double>;
 
 // 2D dimension (x, y)
 using Dimension2d = std::pair<int, int>;
 
-// 2D floating point dimension (x, y)
-using Dimension2df = std::pair<float, float>;
+// 2D doubleing point dimension (x, y)
+using Dimension2dd = std::pair<double, double>;
 
 // Text orientation
 enum Orientation : uint8_t
@@ -254,36 +266,36 @@ struct WindowRect final
     int bottom = 0;
 };
 
-struct WindowRectf final
+struct WindowRectd final
 {
    public:
-    WindowRectf(float top, float left, float right, float bottom)
+    WindowRectd(double top, double left, double right, double bottom)
         : top(top), bottom(bottom), right(right), left(left)
     {
     }
-    WindowRectf() = default;
-    float Width() const
+    WindowRectd() = default;
+    double Width() const
     {
         return right - left;
     }
-    float Height() const
+    double Height() const
     {
         return top - bottom;
     }
-    const Dimension2df Size() const
+    const Dimension2dd Size() const
     {
         return {right - left, top - bottom};
     }
-    bool operator==(const WindowRectf& other) const
+    bool operator==(const WindowRectd& other) const
     {
         return this->top == other.top && this->bottom == other.bottom && this->left == other.left &&
                this->right == other.right;
     }
 
-    float top = 0.0f;
-    float left = 0.0f;
-    float right = 0.0f;
-    float bottom = 0.0f;
+    double top = 0.0;
+    double left = 0.0;
+    double right = 0.0;
+    double bottom = 0.0;
 };
 
 // Represents a polyline to be drawn in the window. More efficient than multiple lines.
@@ -443,7 +455,6 @@ struct DrawItem final
 // Represents a series of draw items to be executed in the window
 struct DrawCommand final
 {
-    Color background = Color::Black();
     std::vector<DrawItem> items = {};
 };
 
@@ -792,10 +803,7 @@ extern NSString* const MouseUpNotification = @"MouseUpNotification";
 - (void)SaveScreenshot:(const std::string&)fileName
 {
     // Show a save dialog
-    // NSSavePanel* savePanel = [NSSavePanel savePanel];
-    // savePanel.allowedFileTypes = @[@"png"];
     NSString* defaultName = [NSString stringWithUTF8String:fileName.c_str()];
-    // [savePanel setNameFieldStringValue:defaultName];
 
     dispatch_async(dispatch_get_main_queue(), ^{
 #pragma clang diagnostic push
@@ -804,7 +812,7 @@ extern NSString* const MouseUpNotification = @"MouseUpNotification";
       savePanel.allowedFileTypes = @[ @"png" ];
       [savePanel setNameFieldStringValue:defaultName];
 
-      // This blocks the main thread, which is fine for a modal dialog
+      // Modal dialog
       if ([savePanel runModal] == NSModalResponseOK)
       {
           NSURL* saveURL = [savePanel URL];
@@ -835,26 +843,17 @@ namespace cpplot2d
 struct Theme final
 {
     Theme() = default;
-    Theme(Color background, Color grid, Color axes, Color text, Color secondaryText, Color highlight, Color secondaryBase,
-                      std::vector<Color> seriesColors = {})
-        : background(background),
-          grid(grid),
-          axes(axes),
-          text(text),
-          secondaryText(secondaryText),
-          highlight(highlight),
-          secondaryBase(secondaryBase),
-          seriesColors(seriesColors)
-    {
-    }
     Color background = Color::Black();
     Color grid = Color::Grey();
     Color axes = Color::White();
     Color text = Color::White();
-    Color secondaryText = Color::White();
-    Color highlight = Color::Yellow();
-    Color secondaryBase = Color::FromRGB(255, 165, 0);
-    std::vector<Color> seriesColors = {Color::Red(), Color::Green(), Color::Blue(), Color::Yellow()};
+    Color secondaryText = Color::Yellow();
+    Color highlight = Color::Blue();
+    Color buttonFrame = Color::White();
+    Color buttonFill = Color::DarkGrey();
+    Color secondaryBase = Color::DarkGrey();
+    std::vector<Color> seriesColors = {Color::Red(), Color::Green(), Color::Blue(),
+                                       Color::Yellow()};
 
     inline Color GetSeriesColor(size_t seriesIndex) const
     {
@@ -868,38 +867,40 @@ struct Theme final
     static Theme Dark()
     {
         return Theme{
-            Color::FromRGB(20,20,20),                     // background
-            Color::DarkGrey(),                  // grid
-            Color::White(),                     // axes
-            Color::White(),                     // text
-            Color::Black(),                     // secondary text
-            Color::Yellow(),                    // highlight
-            Color::Grey(),                      // secondaryBase (grey)
-            {Color::Red(), Color::Green(),      // series colors
-             Color::Blue(), Color::Yellow(),
-             Color::FromRGB(255, 165, 0),       // orange
-             Color::FromRGB(128, 0, 128),       // purple
-             Color::FromRGB(0, 255, 255),       // cyan
-             Color::FromRGB(255, 192, 203)}     // pink
+            Color::Black(),                                             // background
+            Color::DarkGrey(),                                          // grid
+            Color::Grey(),                                              // axes
+            Color::FromRGB(170, 170, 170),                              // text
+            Color::Yellow(),                                            // secondary text
+            Color::Yellow(),                                            // highlight
+            Color::Grey(),                                              // buttonFrame
+            Color::Grey(),                                              // buttonFill
+            Color::FromRGB(18, 18, 18),                                 // secondaryBase
+            {Color::Yellow(), Color::Green(),                           // series colors
+             Color::Blue(), Color::Red(), Color::FromRGB(255, 165, 0),  // orange
+             Color::FromRGB(128, 0, 128),                               // purple
+             Color::FromRGB(0, 255, 255),                               // cyan
+             Color::FromRGB(255, 192, 203)}                             // pink
         };
     }
 
     static Theme Light()
     {
         return Theme{
-            Color::White(),                     // background
-            Color::FromRGB(200, 200, 200),      // grid
-            Color::Black(),                     // axes
-            Color::Black(),                     // text
-            Color::DarkGrey(),                  // secondary text  
-            Color::Yellow(),                    // highlight (orange)
-            Color::FromRGB(255, 165, 0),        // secondaryBase (orange)
-            {Color::Red(), Color::Green(),      // series colors
-             Color::Blue(), Color::Yellow(),
-             Color::FromRGB(255, 165, 0),       // orange
-             Color::FromRGB(128, 0, 128),       // purple
-             Color::FromRGB(0, 255, 255),       // cyan
-             Color::FromRGB(255, 192, 203)}     // pink
+            Color::White(),                 // background
+            Color::FromRGB(200, 200, 200),  // grid
+            Color::Black(),                 // axes
+            Color::Black(),                 // text
+            Color::DarkGrey(),              // secondary text
+            Color::Yellow(),                // highlight (orange)
+            Color::Grey(),                  // buttonFrame
+            Color::FromRGB(200, 200, 200),  // buttonFill (light grey)
+            Color::LightGrey(),             // secondaryBase (orange)
+            {Color::Red(), Color::Green(),  // series colors
+             Color::Blue(), Color::Yellow(), Color::FromRGB(255, 165, 0),  // orange
+             Color::FromRGB(128, 0, 128),                                  // purple
+             Color::FromRGB(0, 255, 255),                                  // cyan
+             Color::FromRGB(255, 192, 203)}                                // pink
         };
     }
 };
@@ -912,7 +913,6 @@ struct SeriesStyle
 struct LineStyle : public SeriesStyle
 {
     std::optional<uint8_t> thickness;
-
 };
 struct ScatterStyle : public SeriesStyle
 {
@@ -922,10 +922,10 @@ struct ScatterStyle : public SeriesStyle
 // Plot appearance properties
 struct PlotProperties final
 {
-public:
+   public:
     Theme theme = Theme::Dark();
     const std::pair<int, int> defaultWindowSize = {800, 600};
-    bool resizable = true; // TODO: implement
+    bool resizable = true;  // TODO: implement
     bool showGridLines = true;
     bool showLegend = false;
     bool enablePan = true;
@@ -946,40 +946,44 @@ class Plot2D final
 
     /**
      Adds a line series to the plot.
-     @tparam T Numeric type of the input data (e.g., float, double, int)
+     @tparam T Numeric type of the input data (e.g., double, double, int)
      @param x Vector of x-coordinates
      @param y Vector of y-coordinates
      @param  style Style properties for the line
     */
     template <typename T>
-    Plot2D& AddLine(const std::vector<T>& x, const std::vector<T>& y, std::optional<LineStyle> style = {});
+    Plot2D& AddLine(const std::vector<T>& x, const std::vector<T>& y,
+                    std::optional<LineStyle> style = {});
 
     /**
      Adds a line series to the plot.
-     @tparam T Numeric type of the input data (e.g., float, double, int)
+     @tparam T Numeric type of the input data (e.g., double, double, int)
      @param points Vector of x,y-coordinate
      @param style Style properties for the line
     */
     template <typename T>
-    Plot2D& AddLine(const std::vector<std::pair<T, T>>& points,  std::optional<LineStyle> style = {});
+    Plot2D& AddLine(const std::vector<std::pair<T, T>>& points,
+                    std::optional<LineStyle> style = {});
 
     /**
      Adds a scatter series to the plot.
-     @tparam T Numeric type of the input data (e.g., float, double, int)
+     @tparam T Numeric type of the input data (e.g., double, double, int)
      @param x Vector of x-coordinates
      @param y Vector of y-coordinates
      @param  style Style properties for the scatter points
     */
     template <typename T>
-    Plot2D& AddPoints(const std::vector<T>& x, const std::vector<T>& y, std::optional<ScatterStyle> style = {});
+    Plot2D& AddPoints(const std::vector<T>& x, const std::vector<T>& y,
+                      std::optional<ScatterStyle> style = {});
     /**
      Adds a scatter series to the plot.
-     @tparam T Numeric type of the input data (e.g., float, double, int)
+     @tparam T Numeric type of the input data (e.g., double, double, int)
      @param points Vector of x,y-coordinate
      @param style Style properties for the scatter points
     */
     template <typename T>
-    Plot2D& AddPoints(const std::vector<std::pair<T, T>>& points, std::optional<ScatterStyle> style = {});
+    Plot2D& AddPoints(const std::vector<std::pair<T, T>>& points,
+                      std::optional<ScatterStyle> style = {});
 
     /**
      * Sets the plot theme.
@@ -1009,11 +1013,10 @@ class Plot2D final
     // friend class to expose private methods for tests
     friend class Plot2DTestAccessor;
 #endif
-
     using Point = detail::Point;
-    using Pointf = detail::Pointf;
+    using Pointd = detail::Pointd;
     using Dimension2d = detail::Dimension2d;
-    using Dimension2df = detail::Dimension2df;
+    using Dimension2dd = detail::Dimension2dd;
     using GuiLine = detail::GuiLine;
     using GuiPolyline = detail::GuiPolyline;
     using GuiText = detail::GuiText;
@@ -1028,9 +1031,7 @@ class Plot2D final
     using Orientation = detail::Orientation;
     using Alignment = detail::Alignment;
     using WindowRect = detail::WindowRect;
-    using WindowRectf = detail::WindowRectf;
-
-
+    using WindowRectd = detail::WindowRectd;
 
     // Plot interaction modes
     enum class InteractionMode : uint8_t
@@ -1042,23 +1043,21 @@ class Plot2D final
         ZOOM_ACTIVE = 4
     };
 
-
     // Data series
     class Series
     {
        public:
-        Series(const std::vector<float>& xs, const std::vector<float>& ys)
-            : index(0)
+        Series(const std::vector<double>& xs, const std::vector<double>& ys) : index(0)
         {
             data.reserve(xs.size());
             for (int i = 0; i < xs.size(); i++)
             {
-                data.emplace_back(Pointf{xs[i], ys[i]});
+                data.emplace_back(Pointd{xs[i], ys[i]});
             }
 
             transformedPoints.reserve(xs.size());
         }
-        std::vector<Pointf> data = {};
+        std::vector<Pointd> data = {};
         std::vector<Point> transformedPoints = {};
         size_t index = 0;
     };
@@ -1067,7 +1066,8 @@ class Plot2D final
     class LineSeries : public Series
     {
        public:
-        LineSeries(const std::vector<float>& xs, const std::vector<float>& ys, const LineStyle& style)
+        LineSeries(const std::vector<double>& xs, const std::vector<double>& ys,
+                   const LineStyle& style)
             : Series(xs, ys), style(style)
         {
         }
@@ -1078,18 +1078,12 @@ class Plot2D final
     class ScatterSeries : public Series
     {
        public:
-        ScatterSeries(const std::vector<float>& xs, const std::vector<float>& ys, const ScatterStyle& style)
+        ScatterSeries(const std::vector<double>& xs, const std::vector<double>& ys,
+                      const ScatterStyle& style)
             : Series(xs, ys), style(style)
         {
         }
         ScatterStyle style;
-    };
-
-    // Helper for creating file names
-    class FileName
-    {
-       public:
-        static std::string Create(const std::string& dir, const std::string& filename);
     };
 
     struct IClipBackend
@@ -1233,15 +1227,23 @@ class Plot2D final
         ACTION_BAR = 1
     };
 
+    struct ViewportMargins
+    {
+        int left;
+        int right;
+        int top;
+        int bottom;
+    };
     struct Layout
     {
-        uint16_t actionBarHeight = 20;
-        uint8_t actionBarButtonSpacing = 5;
-        float viewportMarginFactor = 0.125f;
-        Dimension2d actionBarButtonSize = {70, 20};
-        uint8_t tickCount = 5;
-        uint8_t tickLength = 4;
-        uint8_t pixelScale = 4;
+        static constexpr uint16_t actionBarHeight = 30;
+        static constexpr uint8_t actionBarButtonSpacing = 5;
+        static constexpr ViewportMargins viewportMargins = {100, 60, 40 + actionBarHeight, 60};
+        static constexpr uint8_t plotCenterOffset = 10;
+        static constexpr Dimension2d actionBarButtonSize = {40, 20};
+        static constexpr uint8_t tickCount = 7;
+        static constexpr uint8_t tickLength = 5;
+        static constexpr uint8_t pixelScale = 4;
     } m_layout;
 
     static std::unique_ptr<IGraphicsContext> m_graphicsContext;
@@ -1251,15 +1253,15 @@ class Plot2D final
     DrawCommand m_plotDrawCommand;
 
     void Initialize();
-    void DoAddLine(const std::vector<float>& xf, const std::vector<float>& yf,
+    void DoAddLine(const std::vector<double>& xf, const std::vector<double>& yf,
                    std::optional<LineStyle> style = std::nullopt);
-    void DoAddScatter(const std::vector<float>& xf, const std::vector<float>& yf, std::optional<ScatterStyle> style =
-                          std::nullopt);
-    WindowRectf PadRect(const WindowRectf& r, float padFrac);
+    void DoAddScatter(const std::vector<double>& xf, const std::vector<double>& yf,
+                      std::optional<ScatterStyle> style = std::nullopt);
+    WindowRectd PadRect(const WindowRectd& r, double padFrac);
     WindowRect GetActionBarRect(IWindow& w);
     ScatterStyle ResolveStyle(const ScatterStyle* userStyle, size_t seriesIndex);
     LineStyle ResolveStyle(const LineStyle* userStyle, size_t seriesIndex);
-   void UpdateDataBounds(const std::vector<float>& x, const std::vector<float>& y);
+    void UpdateDataBounds(const std::vector<double>& x, const std::vector<double>& y);
     void OnMouseMoveCallback(IWindow& window, Point mousePos);
     void OnMouseLButtonDownCallback(IWindow& window, Point mousePos);
     void OnMouseLButtonUpCallback(IWindow& window, Point mousePos);
@@ -1275,17 +1277,27 @@ class Plot2D final
     void OnResetViewClicked(IWindow& window);
     void HandleMouseHover(IWindow& w, Point mousePos);
     void HandleZoomDrag(IWindow& w, Point mousePos);
-    Pointf GetDataCoordinates(const Point& windowCoord, const WindowRect& viewport,
-                              const WindowRectf& view);
+    Pointd GetDataCoordinates(const Point& windowCoord, const WindowRect& viewport,
+                              const WindowRectd& view);
     std::string GetInteractionText(const InteractionMode interactionMode);
     DrawItem GetInteractionTextDrawItem(const std::string& text, const WindowRect& actionBarRect);
     void HandlePanDrag(IWindow& w, Point mousePos);
     void Zoom(WindowRect rect, IWindow& w);
-    const bool IsPointInsideRect(const Point& p, const WindowRect& rect);
+    __forceinline bool IsPointInsideRect(const Point& p, const WindowRect& rect) noexcept;
+    inline int FastRound(double x)
+    {
+        return static_cast<int>(x + (x >= 0 ? 0.5 : -0.5));
+    }
     void SetViewportRect(const WindowRect& rect);
-    Dimension2df GetTransformationScales(const WindowRect& viewport, const WindowRectf& dataView);
-    void GetTransformedPoint(const WindowRect& viewport, const WindowRectf& dataView,
-                             const Dimension2df& scales, const Pointf& point, Point& out);
+    Dimension2dd GetTransformationScales(const WindowRect& viewport, const WindowRectd& dataView);
+    void GetTransformedPoint(const WindowRect& viewport, const WindowRectd& dataView,
+                             const Dimension2dd& scales, const Pointd& point, Point& out);
+    inline void GetTransformedPointFast(const double sx, const double sy, const double ox,
+                                        const double oy, const Pointd& p, Point& out) noexcept
+    {
+        out.first = static_cast<int>(p.first * sx + ox + (p.first >= 0 ? 0.5 : -0.5));
+        out.second = static_cast<int>(p.second * sy + oy + (p.second >= 0 ? 0.5 : -0.5));
+    }
     void UpdatePlotDrawCommand(DrawCommand& drawCommand, IWindow* window);
     void DrawBasePlot(DrawCommand& drawCommand, IWindow* window);
     void DrawActionBar(DrawCommand& drawCommand, IWindow* window);
@@ -1305,6 +1317,7 @@ class Plot2D final
     DataSeries m_dataSeries;
     size_t m_nextSeriesIndex = 0;
     WindowRect m_viewportRect = {0, 0, 0, 0};  // current viewport in window space
+    Dimension2d m_plotCenter = {0, 0};
     int m_zoomRectIndex = -1;
     InteractionMode m_interactionMode = InteractionMode::NONE;
     int m_interactionTextIndex = -1;
@@ -1312,12 +1325,12 @@ class Plot2D final
     bool m_plotDirty = true;
     bool m_invalidateMouseCoordRegion = false;
     Point m_lastMousePos = {0, 0};
-    WindowRectf m_dataBounds =
-        WindowRectf(-(std::numeric_limits<float>::max)(), (std::numeric_limits<float>::max)(),
-                    -(std::numeric_limits<float>::max)(),
-                    (std::numeric_limits<float>::max)());  // union of all series
-    WindowRectf m_defaultView;                             // dataBounds + padding
-    WindowRectf m_view;                                    // current view state
+    WindowRectd m_dataBounds =
+        WindowRectd(-(std::numeric_limits<double>::max)(), (std::numeric_limits<double>::max)(),
+                    -(std::numeric_limits<double>::max)(),
+                    (std::numeric_limits<double>::max)());  // union of all series
+    WindowRectd m_defaultView;                              // dataBounds + padding
+    WindowRectd m_view;                                     // current view state
     Dimension2d m_charSize = {5, 5};
     std::string m_xLabel = "";
     std::string m_yLabel = "";
@@ -1634,13 +1647,10 @@ void cpplot2d::Plot2D::Initialize()
 #else
     std::throw(std::exception("Unsupported platform."));
 #endif
-    // Must initialize plot state before creating since windows need backing color
-    m_plotDrawCommand.background = m_props.theme.background;
-
     // Initialize graphics context and create window
     m_graphicsContext->Init();
-    m_window = std::unique_ptr<IWindow>(m_graphicsContext->MakeWindow(
-        m_props.theme.background, m_defaultWindowSize, false, title));
+    m_window = std::unique_ptr<IWindow>(
+        m_graphicsContext->MakeWindow(m_props.theme.background, m_defaultWindowSize, false, title));
 
     m_charSize = m_window->GetAverageCharSize();
     m_mouseCoordinateRectOffset = {40 * m_charSize.first, 2 * m_charSize.second};
@@ -1657,6 +1667,11 @@ void cpplot2d::Plot2D::Initialize()
     m_window->OnDrawCallback = [this]() { this->OnDrawWindowCallback(*m_window); };
 
     // Add action menu buttons
+    ActionButton saveButton;
+    saveButton.callback = [this]() { this->OnSaveClicked(*m_window); };
+    saveButton.label = "Save";
+    m_actionButtons.push_back(saveButton);
+
     ActionButton resetButton;
     resetButton.callback = [this]() { this->OnResetViewClicked(*m_window); };
     resetButton.label = "Reset";
@@ -1671,16 +1686,10 @@ void cpplot2d::Plot2D::Initialize()
     grabButton.callback = [this]() { this->OnToggleGrabClicked(*m_window); };
     grabButton.label = "Grab";
     m_actionButtons.push_back(grabButton);
-
-    ActionButton saveButton;
-    saveButton.callback = [this]() { this->OnSaveClicked(*m_window); };
-    saveButton.label = "Save";
-    m_actionButtons.push_back(saveButton);
 }
 void cpplot2d::Plot2D::SetTheme(const Theme& theme)
 {
     m_props.theme = theme;
-    m_plotDrawCommand.background = theme.background;
 
     // Resolve each series style to apply new theme colors
     size_t seriesIndex = 0;
@@ -1696,7 +1705,7 @@ void cpplot2d::Plot2D::SetTheme(const Theme& theme)
     SetIsDirty(true);
 }
 
-void cpplot2d::Plot2D::UpdateDataBounds(const std::vector<float>& x, const std::vector<float>& y)
+void cpplot2d::Plot2D::UpdateDataBounds(const std::vector<double>& x, const std::vector<double>& y)
 {
     for (size_t i = 0; i < x.size(); ++i)
     {
@@ -1718,17 +1727,18 @@ cpplot2d::Plot2D& cpplot2d::Plot2D::AddLine(const std::vector<T>& x, const std::
                   "Plot2D requires a numeric type for T (bool is not allowed)");
     assert(x.size() == y.size());
 
-    std::vector<float> xf(x.begin(), x.end());
-    std::vector<float> yf(y.begin(), y.end());
+    std::vector<double> xf(x.begin(), x.end());
+    std::vector<double> yf(y.begin(), y.end());
 
     DoAddLine(xf, yf, style);
 
     return *this;
 }
-void cpplot2d::Plot2D::DoAddLine(const std::vector<float>& xf, const std::vector<float>& yf,
+void cpplot2d::Plot2D::DoAddLine(const std::vector<double>& xf, const std::vector<double>& yf,
                                  std::optional<LineStyle> style)
 {
-    if(!style.has_value()) {
+    if (!style.has_value())
+    {
         style = LineStyle{};
         style->color = m_props.theme.GetSeriesColor(m_nextSeriesIndex++);
         style->thickness = 1;
@@ -1742,14 +1752,15 @@ void cpplot2d::Plot2D::DoAddLine(const std::vector<float>& xf, const std::vector
     UpdateDataBounds(xf, yf);
 }
 template <typename T>
-cpplot2d::Plot2D& cpplot2d::Plot2D::AddLine(const std::vector<std::pair<T, T>>& points, std::optional<LineStyle> style)
+cpplot2d::Plot2D& cpplot2d::Plot2D::AddLine(const std::vector<std::pair<T, T>>& points,
+                                            std::optional<LineStyle> style)
 {
     static_assert(std::is_arithmetic<T>::value && !std::is_same<T, bool>::value,
                   "Plot2D requires a numeric type for T (bool is not allowed)");
 
     size_t dataSize = points.size();
-    std::vector<float> xf(dataSize);
-    std::vector<float> yf(dataSize);
+    std::vector<double> xf(dataSize);
+    std::vector<double> yf(dataSize);
     for (size_t i = 0; i < dataSize; ++i)
     {
         xf[i] = points[i].first;
@@ -1760,11 +1771,12 @@ cpplot2d::Plot2D& cpplot2d::Plot2D::AddLine(const std::vector<std::pair<T, T>>& 
     return *this;
 }
 
-void cpplot2d::Plot2D::DoAddScatter(const std::vector<float>& xf, const std::vector<float>& yf,
+void cpplot2d::Plot2D::DoAddScatter(const std::vector<double>& xf, const std::vector<double>& yf,
                                     std::optional<ScatterStyle> style)
 {
     // Sort the data ahead of time since the update loop will cull duplicates
-    if(!style.has_value()) {
+    if (!style.has_value())
+    {
         style = ScatterStyle{};
         style->color = m_props.theme.GetSeriesColor(m_nextSeriesIndex++);
         style->radius = 1;
@@ -1790,8 +1802,8 @@ cpplot2d::Plot2D& cpplot2d::Plot2D::AddPoints(const std::vector<T>& x, const std
                   "Plot2D requires a numeric type for T (bool is not allowed)");
     assert(x.size() == y.size());
 
-    std::vector<float> xf(x.begin(), x.end());
-    std::vector<float> yf(y.begin(), y.end());
+    std::vector<double> xf(x.begin(), x.end());
+    std::vector<double> yf(y.begin(), y.end());
 
     DoAddScatter(xf, yf, style);
 
@@ -1806,8 +1818,8 @@ cpplot2d::Plot2D& cpplot2d::Plot2D::AddPoints(const std::vector<std::pair<T, T>>
                   "Plot2D requires a numeric type for T (bool is not allowed)");
 
     size_t size = points.size();
-    std::vector<float> xf(size);
-    std::vector<float> yf(size);
+    std::vector<double> xf(size);
+    std::vector<double> yf(size);
     for (size_t i = 0; i < size; ++i)
     {
         xf[i] = points[i].first;
@@ -1817,80 +1829,108 @@ cpplot2d::Plot2D& cpplot2d::Plot2D::AddPoints(const std::vector<std::pair<T, T>>
     DoAddScatter(xf, yf, style);
     return *this;
 }
-inline cpplot2d::ScatterStyle cpplot2d::Plot2D::ResolveStyle(const ScatterStyle* userStyle, size_t seriesIndex)
+inline cpplot2d::ScatterStyle cpplot2d::Plot2D::ResolveStyle(const ScatterStyle* userStyle,
+                                                             size_t seriesIndex)
 {
     Color color = m_props.theme.GetSeriesColor(seriesIndex);
 
     ScatterStyle style;
     style.color = color;
     style.radius = 1;
-    if (userStyle) {
+    if (userStyle)
+    {
         style.color = userStyle->color.has_value() ? userStyle->color.value() : color;
         style.radius = userStyle->radius.has_value() ? userStyle->radius.value() : 1;
     }
     return style;
 }
-inline cpplot2d::LineStyle cpplot2d::Plot2D::ResolveStyle(const LineStyle* userStyle, size_t seriesIndex)
+inline cpplot2d::LineStyle cpplot2d::Plot2D::ResolveStyle(const LineStyle* userStyle,
+                                                          size_t seriesIndex)
 {
     Color color = m_props.theme.GetSeriesColor(seriesIndex);
 
     LineStyle style;
     style.color = color;
     style.thickness = 1;
-    if (userStyle) {
+    if (userStyle)
+    {
         style.color = userStyle->color.has_value() ? userStyle->color.value() : color;
         style.thickness = userStyle->thickness.has_value() ? userStyle->thickness.value() : 1;
     }
     return style;
 }
 
-inline cpplot2d::Plot2D::WindowRectf cpplot2d::Plot2D::PadRect(const WindowRectf& r, float padFrac)
+inline cpplot2d::Plot2D::WindowRectd cpplot2d::Plot2D::PadRect(const WindowRectd& r, double padFrac)
 {
-    float dx = r.Width() * padFrac;
-    float dy = r.Height() * padFrac;
+    double dx = r.Width() * padFrac;
+    double dy = r.Height() * padFrac;
 
-    return WindowRectf(r.top + dy, r.left - dx, r.right + dx, r.bottom - dy);
+    return WindowRectd(r.top + dy, r.left - dx, r.right + dx, r.bottom - dy);
 }
 
 void cpplot2d::Plot2D::DrawActionBar(DrawCommand& drawCommand, IWindow* window)
 {
     const WindowRect rect = window->GetRect();
     const WindowRect actionBarRect = GetActionBarRect(*window);
+    Theme theme = m_props.theme;
 
     // Draw action bar background
-    drawCommand.items.emplace_back(DrawItem(GuiRect({actionBarRect.left, actionBarRect.top},
-                                                    {actionBarRect.right, actionBarRect.bottom},
-                                                    m_props.theme.secondaryBase, true, Color::Grey(), 1),
-                                            ZOrder::Z_OVERLAY));
+    drawCommand.items.emplace_back(
+        DrawItem(GuiRect({actionBarRect.left, actionBarRect.top},
+                         {actionBarRect.right, actionBarRect.bottom}, theme.secondaryBase, true,
+                         theme.secondaryBase, 1),
+                 ZOrder::Z_OVERLAY));
 
+    // Bottom line for action bar
+    drawCommand.items.emplace_back(
+        DrawItem(GuiLine({actionBarRect.left, actionBarRect.bottom},
+                         {actionBarRect.right, actionBarRect.bottom}, theme.grid, 1),
+                 ZOrder::Z_OVERLAY));
     Dimension2d actionButtonSize = m_layout.actionBarButtonSize;
 
     // Action buttons
-    Color textColor = m_props.theme.secondaryText;
+    Color textColor = theme.text;
     int padding = m_layout.actionBarButtonSpacing;
     int x = padding;  // Start with padding
-    int y = (m_layout.actionBarHeight - actionButtonSize.second) / 2;
+    int y = (m_layout.actionBarHeight - actionButtonSize.second + 2) / 2;
     WindowRect buttonRect;
     buttonRect.top = rect.top - y;  // Button rects are the same veritcally
     buttonRect.bottom = buttonRect.top - actionButtonSize.second;
     Point textOrigin;
-    textOrigin.second = buttonRect.bottom + buttonRect.Height() / 2 -
-                        m_charSize.second / 2;  // Vertically center text
+    textOrigin.second = buttonRect.bottom + (buttonRect.Height() - m_charSize.second + 4) /
+                                                2;  // Vertically center text
+
+    drawCommand.items.emplace_back(
+        GuiLine({x, buttonRect.top}, {x, buttonRect.bottom}, m_props.theme.background),
+        ZOrder::Z_ACTIONBAR_ICONS);
+    drawCommand.items.emplace_back(
+        GuiLine({x + 1, buttonRect.top}, {x + 1, buttonRect.bottom}, m_props.theme.buttonFill),
+        ZOrder::Z_ACTIONBAR_ICONS);
     for (ActionButton& button : m_actionButtons)
     {
         buttonRect.left = x + padding;
-        buttonRect.right = x + actionButtonSize.first;
+        buttonRect.right = x + m_charSize.first * button.label.size() + padding * 5;
 
         button.rect = buttonRect;
 
         textOrigin.first = buttonRect.left + buttonRect.Width() / 2;
 
         drawCommand.items.emplace_back(
-            DrawItem(GuiText(button.label, textOrigin, textColor,
-                             Orientation::HORIZONTAL, 10, m_font, Alignment::CENTER),
-                     ZOrder::Z_ACTIONBAR_TEXT));
+            GuiText(button.label, textOrigin, textColor, Orientation::HORIZONTAL, 10, m_font,
+                    Alignment::CENTER),
+            ZOrder::Z_ACTIONBAR_TEXT);
 
-        x += actionButtonSize.first;
+        // Separation lines for buttons
+        drawCommand.items.emplace_back(
+            GuiLine({buttonRect.right, buttonRect.top}, {buttonRect.right, buttonRect.bottom},
+                    m_props.theme.background),
+            ZOrder::Z_ACTIONBAR_ICONS);
+        drawCommand.items.emplace_back(
+            GuiLine({buttonRect.right + 1, buttonRect.top},
+                    {buttonRect.right + 1, buttonRect.bottom}, m_props.theme.buttonFill),
+            ZOrder::Z_ACTIONBAR_ICONS);
+
+        x += buttonRect.right - buttonRect.left + padding;
     }
 }
 inline cpplot2d::Plot2D::DrawItem cpplot2d::Plot2D::GetInteractionTextDrawItem(
@@ -1900,7 +1940,7 @@ inline cpplot2d::Plot2D::DrawItem cpplot2d::Plot2D::GetInteractionTextDrawItem(
         GuiText(text,
                 {actionBarRect.right - 4,
                  actionBarRect.bottom + (actionBarRect.Height() - m_charSize.second) / 2},
-                m_props.theme.secondaryText, Orientation::HORIZONTAL, 10, m_font, Alignment::RIGHT),
+                m_props.theme.text, Orientation::HORIZONTAL, 10, m_font, Alignment::RIGHT),
         ZOrder::Z_ACTIONBAR_TEXT);
 }
 inline std::string cpplot2d::Plot2D::GetInteractionText(const InteractionMode interactionMode)
@@ -1921,165 +1961,139 @@ inline std::string cpplot2d::Plot2D::GetInteractionText(const InteractionMode in
 void cpplot2d::Plot2D::DrawBasePlot(DrawCommand& drawCommand, IWindow* window)
 {
     WindowRect viewport = m_viewportRect;
-    WindowRectf view = m_view;
+    WindowRectd view = m_view;
     const int leftBorderPos = viewport.left;
     const int rightBorderPos = viewport.right;
     const int topBorderPos = viewport.top;
     const int bottomBorderPos = viewport.bottom;
 
     Color axisColor = m_props.theme.axes;
+    Color textColor = m_props.theme.text;
+    Color gridColor = m_props.theme.grid;
 
     // Viewport rect
     drawCommand.items.emplace_back(
-        DrawItem(GuiRect({leftBorderPos, topBorderPos}, {rightBorderPos, bottomBorderPos},
-                         axisColor, false, axisColor, 1),
-                 ZOrder::Z_AXES));
+        GuiRect({leftBorderPos, topBorderPos}, {rightBorderPos, bottomBorderPos}, axisColor, false,
+                m_props.theme.grid, 1),
+        ZOrder::Z_AXES);
 
+    // Viewport fill
+    drawCommand.items.emplace_back(
+        GuiRect({leftBorderPos, topBorderPos}, {rightBorderPos, bottomBorderPos},
+                m_props.theme.background, true, m_props.theme.background, 1),
+        ZOrder::Z_BACKGROUND);
     // Draw Axis
     const Dimension2d charSize = m_charSize;
     std::stringstream label;
     std::string font = m_font;
-    Color textColor = m_props.theme.text;
-    Color gridColor = m_props.theme.grid;
     bool showGridLines = m_props.showGridLines;
 
     // Draw X-axis ticks & labels
     int numTicksX = m_layout.tickCount;
     int x = 0;
-    float offset = view.left;
-    int tickInterval = (rightBorderPos - leftBorderPos) / (numTicksX + 1);
-    float increment = view.Width() / static_cast<float>(numTicksX + 1);
+    double offset = view.left;
+    double tickSpacingInterval =
+        static_cast<double>(rightBorderPos - leftBorderPos) / (numTicksX + 1);
+    double tickValueIncrement = view.Width() / static_cast<double>(numTicksX + 1);
     const int tickLength = m_layout.tickLength;
     for (int i = 1; i <= numTicksX; ++i)
     {
-        x = leftBorderPos + i * tickInterval;
-        offset += increment;
+        x = static_cast<int>(std::rint(leftBorderPos + i * tickSpacingInterval));
+        offset += tickValueIncrement;
 
         // Tick
         drawCommand.items.emplace_back(
-            DrawItem(GuiLine({x, bottomBorderPos + tickLength}, {x, bottomBorderPos - tickLength},
-                             axisColor),
-                     ZOrder::Z_AXES));
+            GuiLine({x, bottomBorderPos}, {x, bottomBorderPos + tickLength}, axisColor),
+            ZOrder::Z_AXES);
 
         // Grid line
         if (showGridLines)
         {
-            drawCommand.items.emplace_back(DrawItem(
-                GuiLine({x, bottomBorderPos}, {x, topBorderPos}, gridColor), ZOrder::Z_GRID));
-        }
-
-        label.str("");
-        label << std::setprecision(3) << offset;
-        drawCommand.items.emplace_back(DrawItem(
-            GuiText(label.str(),
-                    {x - charSize.first * 3, bottomBorderPos - tickLength - charSize.second},
-                    textColor, Orientation::HORIZONTAL, 10, font),
-            ZOrder::Z_LABELS));
-    }
-
-    // Final X-axis tick/label
-    drawCommand.items.emplace_back(
-        DrawItem(GuiLine({rightBorderPos, bottomBorderPos + tickLength},
-                         {rightBorderPos, bottomBorderPos - tickLength}, axisColor),
-                 ZOrder::Z_AXES));
-    label.str("");
-    label << std::setprecision(3) << offset + increment;
-    drawCommand.items.emplace_back(DrawItem(
-        GuiText(
-            label.str(),
-            {rightBorderPos - charSize.first * 3, bottomBorderPos - tickLength - charSize.second},
-            textColor, Orientation::HORIZONTAL, 10, font),
-        ZOrder::Z_LABELS));
-
-    // Draw Y-axis ticks & labels
-    int numTicksY =  m_layout.tickCount;
-    int y = 0;
-    increment = view.Height() / static_cast<float>(numTicksY + 1);
-    offset = view.bottom;
-    tickInterval = (topBorderPos - bottomBorderPos) / (numTicksY + 1);
-
-    for (int i = 1; i <= numTicksY; i++)
-    {
-        y = bottomBorderPos + (i * tickInterval);
-        offset += increment;
-
-        // Tick
-        drawCommand.items.emplace_back(DrawItem(
-            GuiLine({leftBorderPos - tickLength, y}, {leftBorderPos + tickLength, y}, axisColor),
-            ZOrder::Z_AXES));
-
-         // Grid line
-        if (showGridLines)
-        {
-            drawCommand.items.emplace_back(DrawItem(
-                GuiLine({leftBorderPos, y}, {rightBorderPos, y}, gridColor), ZOrder::Z_GRID));
+            drawCommand.items.emplace_back(
+                GuiLine({x, bottomBorderPos + 1}, {x, topBorderPos}, gridColor), ZOrder::Z_GRID);
         }
 
         label.str("");
         label << std::setprecision(3) << offset;
         drawCommand.items.emplace_back(
-            DrawItem(GuiText(label.str(),
-                             Point({std::max(10, leftBorderPos - charSize.first - tickLength),
-                                    y - (int)(0.5 * charSize.second)}),
-                             textColor, Orientation::HORIZONTAL, 10, font, Alignment::RIGHT),
-                     ZOrder::Z_LABELS));
+            GuiText(label.str(),
+                    {x - charSize.first * 3, bottomBorderPos - tickLength - charSize.second},
+                    textColor, Orientation::HORIZONTAL, 10, font),
+            ZOrder::Z_LABELS);
     }
 
-    // Final Y-axis tick/label
-    drawCommand.items.emplace_back(
-        DrawItem(GuiLine({leftBorderPos - tickLength, topBorderPos},
-                         {leftBorderPos + tickLength, topBorderPos}, axisColor),
-                 ZOrder::Z_AXES));
-    label.str("");
-    label << std::setprecision(3) << offset + increment;
-    drawCommand.items.emplace_back(
-        DrawItem(GuiText(label.str(),
-                         Point({std::max(10, int(leftBorderPos - charSize.first - tickLength)),
-                                topBorderPos - (int)(0.5 * charSize.second)}),
-                         textColor, Orientation::HORIZONTAL, 10, font, Alignment::RIGHT),
-                 ZOrder::Z_LABELS));
+    // Draw Y-axis ticks & labels
+    int numTicksY = m_layout.tickCount;
+    int y = 0;
+    tickValueIncrement = view.Height() / static_cast<double>(numTicksY + 1);
+    offset = view.bottom;
+    tickSpacingInterval = static_cast<double>(topBorderPos - bottomBorderPos) / (numTicksY + 1);
 
+    for (int i = 1; i <= numTicksY; i++)
+    {
+        y = static_cast<int>(std::rint(bottomBorderPos + (i * tickSpacingInterval)));
+        offset += tickValueIncrement;
+
+        // Tick
+        drawCommand.items.emplace_back(
+            GuiLine({leftBorderPos, y}, {leftBorderPos + tickLength, y}, axisColor),
+            ZOrder::Z_AXES);
+
+        // Grid line
+        if (showGridLines)
+        {
+            drawCommand.items.emplace_back(
+                GuiLine({leftBorderPos, y}, {rightBorderPos, y}, gridColor), ZOrder::Z_GRID);
+        }
+
+        label.str("");
+        label << std::setprecision(3) << offset;
+        drawCommand.items.emplace_back(
+            GuiText(label.str(),
+                    Point({std::max(10, leftBorderPos - charSize.first - tickLength),
+                           y - (int)(0.5 * charSize.second)}),
+                    textColor, Orientation::HORIZONTAL, 10, font, Alignment::RIGHT),
+            ZOrder::Z_LABELS);
+    }
 
     // Draw labels/title
     WindowRect rect = window->GetRect();
+    Dimension2d center = m_plotCenter;
     drawCommand.items.emplace_back(
-        DrawItem(GuiText(m_xLabel,
-                         Point(static_cast<int>(rect.right / 2) -
-                                   static_cast<int>(m_xLabel.size()) * charSize.first,
-                               rect.bottom + charSize.second),
-                         textColor, Orientation::HORIZONTAL, 12, font),
-                 ZOrder::Z_LABELS));
-    drawCommand.items.emplace_back(DrawItem(
+        GuiText(m_xLabel, Point(center.first, rect.bottom + charSize.second), textColor,
+                Orientation::HORIZONTAL, 11, font, Alignment::CENTER),
+        ZOrder::Z_LABELS);
+    drawCommand.items.emplace_back(
         GuiText(m_yLabel,
                 Point(rect.left + charSize.second,
                       static_cast<int>(
                           (rect.top - static_cast<int>(m_yLabel.size()) * charSize.first) / 2)),
-                textColor, Orientation::VERTICAL, 12, font),
-        ZOrder::Z_LABELS));
+                textColor, Orientation::VERTICAL, 11, font),
+        ZOrder::Z_LABELS);
     drawCommand.items.emplace_back(
-        DrawItem(GuiText(title,
-                         Point(static_cast<int>(rect.right / 2) -
-                                   static_cast<int>(title.size()) * charSize.first,
-                               topBorderPos + charSize.second),
-                         textColor, Orientation::HORIZONTAL, 12, font),
-                 ZOrder::Z_LABELS));
+        GuiText(title, Point(center.first, topBorderPos + charSize.second), textColor,
+                Orientation::HORIZONTAL, 11, font, Alignment::CENTER),
+        ZOrder::Z_LABELS);
 }
-inline cpplot2d::Plot2D::Dimension2df cpplot2d::Plot2D::GetTransformationScales(
-    const WindowRect& viewport, const WindowRectf& dataView)
+inline cpplot2d::Plot2D::Dimension2dd cpplot2d::Plot2D::GetTransformationScales(
+    const WindowRect& viewport, const WindowRectd& dataView)
 {
-    return {float(viewport.Width()) / (dataView.Width()),
-            float(viewport.Height()) / (dataView.Height())};
+    return {double(viewport.Width()) / (dataView.Width()),
+            double(viewport.Height()) / (dataView.Height())};
 }
 
 inline void cpplot2d::Plot2D::GetTransformedPoint(const WindowRect& viewport,
-                                                  const WindowRectf& dataView,
-                                                  const Dimension2df& scales, const Pointf& point,
+                                                  const WindowRectd& dataView,
+                                                  const Dimension2dd& scales, const Pointd& point,
                                                   Point& out)
 {
-    out.first = viewport.left + static_cast<int>((point.first - dataView.left) * scales.first);
+    const double ox = viewport.left - dataView.left * scales.first;
+    const double oy = viewport.bottom - dataView.bottom * scales.second;
+    out.first = static_cast<int>(point.first * scales.first + ox + (point.first >= 0 ? 0.5 : -0.5));
     out.second =
-        viewport.bottom + static_cast<int>((point.second - dataView.bottom) * scales.second);
+        static_cast<int>(point.second * scales.second + oy + (point.second >= 0 ? 0.5 : -0.5));
 }
+
 inline void cpplot2d::Plot2D::DrawLinePlot(DrawCommand& drawCommand, const WindowRect& viewportRect,
                                            LineSeries& series)
 {
@@ -2087,14 +2101,19 @@ inline void cpplot2d::Plot2D::DrawLinePlot(DrawCommand& drawCommand, const Windo
 
     // Store member variables for faster access
     const size_t seriesSize = series.data.size();
-    const WindowRectf view = m_view;
-    Dimension2df scales = GetTransformationScales(viewportRect, view);
+    const WindowRectd view = m_view;
+    Dimension2dd scales = GetTransformationScales(viewportRect, view);
+
+    const double sx = scales.first;
+    const double sy = scales.second;
+    const double ox = viewportRect.left - view.left * sx;
+    const double oy = viewportRect.bottom - view.bottom * sy;
 
     series.transformedPoints.clear();
 
     // Initialization
     Point transformedPoint;
-    GetTransformedPoint(viewportRect, view, scales, series.data[0], transformedPoint);
+    GetTransformedPointFast(sx, sy, ox, oy, series.data[0], transformedPoint);
     Point lastPoint = transformedPoint;
     bool lastPointInsideViewport = IsPointInsideRect(
         lastPoint, viewportRect);  // Cache to prevent checking bounds on 2 points every iteration.
@@ -2108,7 +2127,7 @@ inline void cpplot2d::Plot2D::DrawLinePlot(DrawCommand& drawCommand, const Windo
 
     for (int i = 1; i < seriesSize; i++)
     {
-        GetTransformedPoint(viewportRect, view, scales, series.data[i], transformedPoint);
+        GetTransformedPointFast(sx, sy, ox, oy, series.data[i], transformedPoint);
 
         // Get axis intercept for point pairs that span across plot boundaries
         currentPointInsideViewport = IsPointInsideRect(transformedPoint, viewportRect);
@@ -2167,7 +2186,8 @@ inline void cpplot2d::Plot2D::DrawLinePlot(DrawCommand& drawCommand, const Windo
     clip.isEnabled = true;
     clip.rect = viewportRect;
     item.clip = clip;
-    item.payload.emplace<GuiPolyline>(series.transformedPoints, series.style.color.value(), series.style.thickness.value());
+    item.payload.emplace<GuiPolyline>(series.transformedPoints, series.style.color.value(),
+                                      series.style.thickness.value());
 }
 void cpplot2d::Plot2D::DrawLinePlots(DrawCommand& drawCommand, const WindowRect& viewportRect,
                                      DataSeries& dataSeries)
@@ -2201,17 +2221,22 @@ inline void cpplot2d::Plot2D::DrawScatterPlot(DrawCommand& drawCommand,
     vRect.left -= diameter;
     vRect.right += diameter;
 
-    // Store member variables for faster access
-    const size_t seriesSize = series.data.size();
     WindowRect viewport = m_viewportRect;
-    const WindowRectf view = m_view;
-    Dimension2df scales = GetTransformationScales(viewport, view);
+    const WindowRectd view = m_view;
+    Dimension2dd scales = GetTransformationScales(viewport, view);
+
+    const double sx = scales.first;
+    const double sy = scales.second;
+    const double ox = viewportRect.left - view.left * sx;
+    const double oy = viewportRect.bottom - view.bottom * sy;
 
     series.transformedPoints.clear();
+
+    const size_t seriesSize = series.data.size();
     Point transformedPoint;
     for (int i = 0; i < seriesSize; i++)
     {
-        GetTransformedPoint(viewport, view, scales, series.data[i], transformedPoint);
+        GetTransformedPointFast(sx, sy, ox, oy, series.data[i], transformedPoint);
 
         // Get axis intercept for point pairs that span across plot boundaries
         if (IsPointInsideRect(transformedPoint, vRect))
@@ -2228,7 +2253,8 @@ inline void cpplot2d::Plot2D::DrawScatterPlot(DrawCommand& drawCommand,
     series.transformedPoints.erase(it, series.transformedPoints.end());
 
     auto& item = drawCommand.items.emplace_back();
-    item.payload.emplace<GuiPointCloud>(series.transformedPoints, series.style.color.value(), series.style.radius.value());
+    item.payload.emplace<GuiPointCloud>(series.transformedPoints, series.style.color.value(),
+                                        series.style.radius.value());
     item.z = ZOrder::Z_DATA;
     ClipRect clip;
     clip.rect = viewportRect;
@@ -2321,13 +2347,22 @@ void cpplot2d::Plot2D::SetViewportRect(const WindowRect& rect)
 
 void cpplot2d::Plot2D::OnWindowResizeCallback(IWindow& window)
 {
+    Layout layout = m_layout;  // cache member variable for faster access
     Dimension2d size = window.GetRect().Size();
-    int verticalOffset =
-        static_cast<int>(static_cast<float>(size.second) * m_layout.viewportMarginFactor);
-    int horizontalOffset =
-        static_cast<int>(static_cast<float>(size.first) * m_layout.viewportMarginFactor);
-    m_viewportRect = WindowRect(size.second - verticalOffset, horizontalOffset,
-                                size.first - horizontalOffset, verticalOffset);
+
+    const int leftMargin = layout.viewportMargins.left;
+    const int rightMargin = layout.viewportMargins.right;
+    const int topMargin = layout.viewportMargins.top;
+    const int bottomMargin = layout.viewportMargins.bottom;
+
+    m_viewportRect = WindowRect(size.second - topMargin,   // top
+                                leftMargin,                // left
+                                size.first - rightMargin,  // right
+                                bottomMargin               // bottom
+    );
+
+    m_plotCenter = {(m_viewportRect.left + m_viewportRect.right) / 2 + layout.plotCenterOffset,
+                    (m_viewportRect.top + m_viewportRect.bottom) / 2 + layout.plotCenterOffset};
 
     m_plotDirty = true;
     window.Invalidate();
@@ -2369,16 +2404,16 @@ void cpplot2d::Plot2D::OnMouseMoveCallback(IWindow& w, Point mousePos)
 }
 void cpplot2d::Plot2D::HandlePanDrag(IWindow& w, Point mousePos)
 {
-    Dimension2df scales = GetTransformationScales(m_viewportRect, m_view);
+    Dimension2dd scales = GetTransformationScales(m_viewportRect, m_view);
     scales.first = 1.f / scales.first;
     scales.second = 1.f / scales.second;
     const Point lastMousePos = m_lastMousePos;
 
-    m_view.left += static_cast<float>((lastMousePos.first - mousePos.first)) * (scales.first);
-    m_view.right += static_cast<float>((lastMousePos.first - mousePos.first)) * (scales.first);
+    m_view.left += static_cast<double>((lastMousePos.first - mousePos.first)) * (scales.first);
+    m_view.right += static_cast<double>((lastMousePos.first - mousePos.first)) * (scales.first);
 
-    m_view.top += static_cast<float>((lastMousePos.second - mousePos.second)) * (scales.second);
-    m_view.bottom += static_cast<float>((lastMousePos.second - mousePos.second)) * (scales.second);
+    m_view.top += static_cast<double>((lastMousePos.second - mousePos.second)) * (scales.second);
+    m_view.bottom += static_cast<double>((lastMousePos.second - mousePos.second)) * (scales.second);
 
     m_plotDirty = true;
     w.Invalidate();
@@ -2418,19 +2453,20 @@ void cpplot2d::Plot2D::HandleZoomDrag(IWindow& w, Point mousePos)
         DrawItem(GuiRect({x1, y2}, {x2, y1}, m_props.theme.highlight), ZOrder::Z_OVERLAY);
     w.Invalidate();
 }
-inline const bool cpplot2d::Plot2D::IsPointInsideRect(const Point& p, const WindowRect& rect)
+__forceinline bool cpplot2d::Plot2D::IsPointInsideRect(const Point& p,
+                                                       const WindowRect& rect) noexcept
 {
     return (p.first > rect.left && p.first < rect.right) &&
            (p.second > rect.bottom && p.second < rect.top);
 }
-inline cpplot2d::detail::Pointf cpplot2d::Plot2D::GetDataCoordinates(const Point& windowCoord,
+inline cpplot2d::detail::Pointd cpplot2d::Plot2D::GetDataCoordinates(const Point& windowCoord,
                                                                      const WindowRect& viewport,
-                                                                     const WindowRectf& view)
+                                                                     const WindowRectd& view)
 {
-    Dimension2df scales = GetTransformationScales(viewport, view);
+    Dimension2dd scales = GetTransformationScales(viewport, view);
 
-    return {static_cast<float>(windowCoord.first - viewport.left) * (1 / scales.first) + view.left,
-            (static_cast<float>(windowCoord.second - viewport.bottom) * (1 / scales.second) +
+    return {static_cast<double>(windowCoord.first - viewport.left) * (1 / scales.first) + view.left,
+            (static_cast<double>(windowCoord.second - viewport.bottom) * (1 / scales.second) +
              view.bottom)};
 }
 
@@ -2439,7 +2475,7 @@ void cpplot2d::Plot2D::HandleMouseHover(IWindow& w, Point mousePos)
     WindowRect actionBarRect = GetActionBarRect(w);
     if (IsPointInsideRect(mousePos, m_viewportRect))
     {
-        Pointf transformedCoords =
+        Pointd transformedCoords =
             GetDataCoordinates({mousePos.first, mousePos.second}, m_viewportRect, m_view);
 
         char buf[64];
@@ -2528,10 +2564,10 @@ void cpplot2d::Plot2D::OnMouseLButtonUpCallback(IWindow& w, Point mousePos)
 void cpplot2d::Plot2D::Zoom(WindowRect zoomRect, IWindow& w)
 {
     // Set plot view to match rectangle
-    Pointf p0 = GetDataCoordinates(Point{zoomRect.left, zoomRect.bottom}, m_viewportRect, m_view);
-    Pointf p1 = GetDataCoordinates(Point{zoomRect.right, zoomRect.top}, m_viewportRect, m_view);
+    Pointd p0 = GetDataCoordinates(Point{zoomRect.left, zoomRect.bottom}, m_viewportRect, m_view);
+    Pointd p1 = GetDataCoordinates(Point{zoomRect.right, zoomRect.top}, m_viewportRect, m_view);
 
-    m_view = WindowRectf(std::max(p0.second, p1.second), std::min(p0.first, p1.first),
+    m_view = WindowRectd(std::max(p0.second, p1.second), std::min(p0.first, p1.first),
                          std::max(p0.first, p1.first), std::min(p0.second, p1.second));
 
     m_plotDirty = true;
@@ -2584,20 +2620,6 @@ void cpplot2d::Plot2D::OnResetViewClicked(IWindow& w)
 
     m_plotDirty = true;
     w.Invalidate();
-}
-std::string cpplot2d::Plot2D::FileName::Create(const std::string& dir, const std::string& filename)
-{
-    std::string safeFilename = filename;
-    std::replace(safeFilename.begin(), safeFilename.end(), ':', '_');
-
-#ifdef _WIN32
-    std::string sep = "\\";
-#else
-    std::string sep = "/";
-#endif
-
-    std::string name = dir + sep + safeFilename;
-    return name;
 }
 
 #ifdef CPPLOT2D_HEADLESS
@@ -2787,16 +2809,13 @@ void cpplot2d::Plot2D::Win32Window::SetIsVisible(bool isVisible)
 
 bool cpplot2d::Plot2D::Win32Window::SaveScreenshot(const std::string& fileName)
 {
-    std::string dir;
-    if (BrowseForFolder(dir))
+    std::string path;
+    if (BrowseForFolder(path))
     {
-        std::string name = FileName::Create(dir, fileName + ".png");
+        path = path + "\\" + fileName + ".png";
         HBITMAP hBitmap = CaptureWindowContent(m_hwnd);
-        SaveHBITMAPToFile(hBitmap, name);
+        SaveHBITMAPToFile(hBitmap, path);
         DeleteObject(hBitmap);
-        std::stringstream wss;
-        wss << "Image Saved to" << std::string(name.begin(), name.end()) << ".";
-        MessageBox(m_hwnd, wss.str().c_str(), "Saved", MB_OK);
     }
     return true;
 }
@@ -3119,13 +3138,17 @@ void cpplot2d::Plot2D::Win32Window::DoDrawText(HDC hdc, GuiText text, RECT clien
         font = CreateVerticalFont(height, text.font);
     }
 
-    if (text.alignment != Alignment::RIGHT)
+    if (text.alignment == Alignment::RIGHT)
+    {
+        SetTextAlign(hdc, TA_RIGHT | TA_TOP);
+    }
+    else if (text.alignment == Alignment::LEFT)
     {
         SetTextAlign(hdc, TA_LEFT | TA_TOP);
     }
-    else
+    else  // CENTER
     {
-        SetTextAlign(hdc, TA_RIGHT | TA_TOP);
+        SetTextAlign(hdc, TA_CENTER | TA_TOP);
     }
     oldFont = (HFONT)SelectObject(hdc, font);
     SetTextColor(hdc, ToWin32Color(text.color));
@@ -3195,9 +3218,9 @@ void cpplot2d::Plot2D::Win32Window::Draw(const GuiRect& rect)
     int height = m_windowDimensions.second;
     HBRUSH brush = GetBrushForColor(rect.borderColor);
 
-    // Add 1 to right side of rect since Win32 stops the rect 1 pixel prior
+    // Add 1 to right and bottom sides of rect since Win32 stops the rect 1 pixel prior
     const RECT winRect = {rect.topLeft.first, height - rect.topLeft.second,
-                          rect.bottomRight.first + 1, height - rect.bottomRight.second};
+                          rect.bottomRight.first + 1, height - rect.bottomRight.second + 1};
 
     if (!rect.isFilled)
     {
@@ -3485,8 +3508,8 @@ Plot2D::CocoaWindow::CocoaWindow(Dimension2d m_defaultWindowSize, Dimension2d po
                                                            queue:[NSOperationQueue mainQueue]
                                                       usingBlock:^(NSNotification* note) {
                                                         NSDictionary* userInfo = note.userInfo;
-                                                        float x = [userInfo[@"x"] floatValue];
-                                                        float y = [userInfo[@"y"] floatValue];
+                                                        double x = [userInfo[@"x"] doubleValue];
+                                                        double y = [userInfo[@"y"] doubleValue];
                                                         this->OnMouseMove(x, y);
                                                       }];
     m_mouseMoveObserver = (void*)mouseMoveObserver;
@@ -3498,8 +3521,8 @@ Plot2D::CocoaWindow::CocoaWindow(Dimension2d m_defaultWindowSize, Dimension2d po
                                                            queue:[NSOperationQueue mainQueue]
                                                       usingBlock:^(NSNotification* note) {
                                                         NSDictionary* userInfo = note.userInfo;
-                                                        float x = [userInfo[@"x"] floatValue];
-                                                        float y = [userInfo[@"y"] floatValue];
+                                                        double x = [userInfo[@"x"] doubleValue];
+                                                        double y = [userInfo[@"y"] doubleValue];
                                                         this->OnMouseLButtonDown(x, y);
                                                       }];
     m_mouseDownObserver = (void*)mouseDownObserver;
@@ -3511,8 +3534,8 @@ Plot2D::CocoaWindow::CocoaWindow(Dimension2d m_defaultWindowSize, Dimension2d po
                                                            queue:[NSOperationQueue mainQueue]
                                                       usingBlock:^(NSNotification* note) {
                                                         NSDictionary* userInfo = note.userInfo;
-                                                        float x = [userInfo[@"x"] floatValue];
-                                                        float y = [userInfo[@"y"] floatValue];
+                                                        double x = [userInfo[@"x"] doubleValue];
+                                                        double y = [userInfo[@"y"] doubleValue];
                                                         this->OnMouseLButtonUp(x, y);
                                                       }];
     m_mouseUpObserver = (void*)mouseUpObserver;
@@ -3670,9 +3693,9 @@ inline void* cpplot2d::Plot2D::CocoaWindow::GetNSColorFromColor(const Color& col
         return it->second;
     }
 
-    NSColor* nsColor = [NSColor colorWithRed:(float)color.r / 255.0
-                                       green:(float)color.g / 255.0
-                                        blue:(float)color.b / 255.0
+    NSColor* nsColor = [NSColor colorWithRed:(double)color.r / 255.0
+                                       green:(double)color.g / 255.0
+                                        blue:(double)color.b / 255.0
                                        alpha:1.0];
     m_colorMap[color] = nsColor;
     return nsColor;
