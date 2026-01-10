@@ -870,7 +870,7 @@ struct Theme final
             Color::Black(),                                             // background
             Color::DarkGrey(),                                          // grid
             Color::Grey(),                                              // axes
-            Color::FromRGB(170, 170, 170),                              // text
+            Color::FromRGB(180, 180, 180),                              // text
             Color::Yellow(),                                            // secondary text
             Color::Yellow(),                                            // highlight
             Color::Grey(),                                              // buttonFrame
@@ -903,6 +903,27 @@ struct Theme final
              Color::FromRGB(255, 192, 203)}                                // pink
         };
     }
+
+    static Theme HighContrast()
+    {
+        return Theme{
+            Color::Black(),                                               // background
+            Color::DarkGrey(),                                            // grid
+            Color::LightGrey(),                                           // axes
+            Color::Yellow(),                                              // text
+            Color::Yellow(),                                              // secondary text
+            Color::Blue(),                                                // highlight
+            Color::Grey(),                                                // buttonFrame
+            Color::Grey(),                                                // buttonFill
+            Color::DarkGrey(),                                            // secondaryBase
+            {Color::Red(),                                                // series colors
+             Color::Blue(), Color::Green(), Color::FromRGB(255, 165, 0),  // orange
+             Color::FromRGB(128, 0, 128),                                 // purple
+             Color::FromRGB(0, 255, 255),                                 // cyan
+             Color::FromRGB(255, 192, 203)}                               // pink
+
+        };
+    }
 };
 
 // Series style properties
@@ -924,13 +945,12 @@ struct PlotProperties final
 {
    public:
     Theme theme = Theme::Dark();
-    const std::pair<int, int> defaultWindowSize = {800, 600};
-    bool resizable = true;  // TODO: implement
+    std::pair<int, int> defaultWindowSize = {800, 600};
     bool showGridLines = true;
-    bool showLegend = false;
+    //bool showLegend = false;
     bool enablePan = true;
     bool enableZoom = true;
-    bool showStatsOverlay = false;
+    //bool showStatsOverlay = false;
 };
 
 #ifdef CPPLOT2D_TEST
@@ -996,12 +1016,6 @@ class Plot2D final
      @param block Set to false to prevent blocking the main thread.
     */
     void Show(bool block = true);
-
-    /**
-     Sets whether the legend should be shown on the plot or not.
-     @param show whether or not to show the legend
-    */
-    void DisplayLegend(bool show);
 
     /**
      * Forces and update to the underlying plot window. Use if Show() was called with block = false.
@@ -1283,7 +1297,7 @@ class Plot2D final
     DrawItem GetInteractionTextDrawItem(const std::string& text, const WindowRect& actionBarRect);
     void HandlePanDrag(IWindow& w, Point mousePos);
     void Zoom(WindowRect rect, IWindow& w);
-    __forceinline bool IsPointInsideRect(const Point& p, const WindowRect& rect) noexcept;
+    inline bool IsPointInsideRect(const Point& p, const WindowRect& rect) noexcept;
     inline int FastRound(double x)
     {
         return static_cast<int>(x + (x >= 0 ? 0.5 : -0.5));
@@ -1672,20 +1686,29 @@ void cpplot2d::Plot2D::Initialize()
     saveButton.label = "Save";
     m_actionButtons.push_back(saveButton);
 
-    ActionButton resetButton;
-    resetButton.callback = [this]() { this->OnResetViewClicked(*m_window); };
-    resetButton.label = "Reset";
-    m_actionButtons.push_back(resetButton);
+    if (m_props.enablePan || m_props.enableZoom)
+    {
+        ActionButton resetButton;
+        resetButton.callback = [this]() { this->OnResetViewClicked(*m_window); };
+        resetButton.label = "Reset";
+        m_actionButtons.push_back(resetButton);
+    }
 
-    ActionButton zoomButton;
-    zoomButton.callback = [this]() { this->OnToggleZoomClicked(*m_window); };
-    zoomButton.label = "Zoom";
-    m_actionButtons.push_back(zoomButton);
+    if (m_props.enableZoom)
+    {
+        ActionButton zoomButton;
+        zoomButton.callback = [this]() { this->OnToggleZoomClicked(*m_window); };
+        zoomButton.label = "Zoom";
+        m_actionButtons.push_back(zoomButton);
+    }
 
-    ActionButton grabButton;
-    grabButton.callback = [this]() { this->OnToggleGrabClicked(*m_window); };
-    grabButton.label = "Grab";
-    m_actionButtons.push_back(grabButton);
+    if (m_props.enablePan)
+    {
+        ActionButton grabButton;
+        grabButton.callback = [this]() { this->OnToggleGrabClicked(*m_window); };
+        grabButton.label = "Grab";
+        m_actionButtons.push_back(grabButton);
+    }
 }
 void cpplot2d::Plot2D::SetTheme(const Theme& theme)
 {
@@ -2453,8 +2476,7 @@ void cpplot2d::Plot2D::HandleZoomDrag(IWindow& w, Point mousePos)
         DrawItem(GuiRect({x1, y2}, {x2, y1}, m_props.theme.highlight), ZOrder::Z_OVERLAY);
     w.Invalidate();
 }
-__forceinline bool cpplot2d::Plot2D::IsPointInsideRect(const Point& p,
-                                                       const WindowRect& rect) noexcept
+inline bool cpplot2d::Plot2D::IsPointInsideRect(const Point& p, const WindowRect& rect) noexcept
 {
     return (p.first > rect.left && p.first < rect.right) &&
            (p.second > rect.bottom && p.second < rect.top);

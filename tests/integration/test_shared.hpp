@@ -28,7 +28,7 @@ TEST_CASE("Small Scatter Plots", "[integration][performance][scatter][small]")
     cpplot2d::ScatterStyle style1;
     style1.radius = 3;
     cpplot2d::PlotProperties props;
-    props.theme = cpplot2d::Theme::Light();
+    props.theme = cpplot2d::Theme::HighContrast();
     cpplot2d::Plot2D plot("small", "Test X", "Test Y", props);
     plot.AddPoints(x, y, style1);
     plot.Show();
