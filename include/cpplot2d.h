@@ -2021,7 +2021,7 @@ void cpplot2d::Plot2D::DrawBasePlot(DrawCommand& drawCommand, IWindow* window)
     const int tickLength = m_layout.tickLength;
     for (int i = 1; i <= numTicksX; ++i)
     {
-        x = static_cast<int>(std::rint(leftBorderPos + i * tickSpacingInterval));
+        x = static_cast<int>(leftBorderPos + i * tickSpacingInterval + 0.5);
         offset += tickValueIncrement;
 
         // Tick
@@ -2054,7 +2054,7 @@ void cpplot2d::Plot2D::DrawBasePlot(DrawCommand& drawCommand, IWindow* window)
 
     for (int i = 1; i <= numTicksY; i++)
     {
-        y = static_cast<int>(std::rint(bottomBorderPos + (i * tickSpacingInterval)));
+        y = static_cast<int>(bottomBorderPos + (i * tickSpacingInterval + 0.5));
         offset += tickValueIncrement;
 
         // Tick
