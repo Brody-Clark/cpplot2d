@@ -1739,7 +1739,6 @@ void cpplot2d::Plot2D::Initialize()
     {
         m_layout.viewportMargins.right += m_layout.legendWidth;
     }
-
 }
 void cpplot2d::Plot2D::SetTheme(const Theme& theme)
 {
@@ -1784,7 +1783,6 @@ cpplot2d::Plot2D& cpplot2d::Plot2D::AddLine(const std::vector<T>& x, const std::
     std::vector<double> xf(x.begin(), x.end());
     std::vector<double> yf(y.begin(), y.end());
 
-
     DoAddLine(xf, yf, props);
 
     return *this;
@@ -1793,8 +1791,10 @@ void cpplot2d::Plot2D::DoAddLine(const std::vector<double>& xf, const std::vecto
                                  std::optional<LineProperties> props)
 {
     LineStyle style;
-    std::string label = (props && props.value().label) ? props.value().label.value()
-                                                       : std::string("Series " + std::to_string(m_nextSeriesIndex).substr(0, 256));
+    std::string label =
+        (props && props.value().label)
+            ? props.value().label.value()
+            : std::string("Series " + std::to_string(m_nextSeriesIndex).substr(0, 256));
 
     if (!props || !props.value().style.has_value())
     {
@@ -1805,13 +1805,12 @@ void cpplot2d::Plot2D::DoAddLine(const std::vector<double>& xf, const std::vecto
     {
         style = ResolveStyle(&props.value().style.value(), m_nextSeriesIndex++);
     }
-    m_dataSeries.lines.emplace_back(xf, yf, style , label);
+    m_dataSeries.lines.emplace_back(xf, yf, style, label);
 
     UpdateDataBounds(xf, yf);
 }
 template <typename T>
-cpplot2d::Plot2D& cpplot2d::Plot2D::AddLine(
-    const std::vector<std::pair<T, T>>& points,
+cpplot2d::Plot2D& cpplot2d::Plot2D::AddLine(const std::vector<std::pair<T, T>>& points,
                                             std::optional<LineProperties> props)
 {
     static_assert(std::is_arithmetic<T>::value && !std::is_same<T, bool>::value,
@@ -1834,7 +1833,8 @@ void cpplot2d::Plot2D::DoAddScatter(const std::vector<double>& xf, const std::ve
                                     std::optional<ScatterProperties> props)
 {
     ScatterStyle style;
-    std::string label = (props && props.value().label) ? props.value().label.value()
+    std::string label = (props && props.value().label)
+                            ? props.value().label.value()
                             : std::string("Series " + std::to_string(m_nextSeriesIndex));
     // Sort the data ahead of time since the update loop will cull duplicates
     if (!props || !props.value().style.has_value())
@@ -2024,8 +2024,7 @@ void cpplot2d::Plot2D::DrawLegend(DrawCommand& drawCommand, const WindowRect& vi
 {
     const uint16_t rectWidth = m_layout.legendWidth;
     const Dimension2d charSize = m_charSize;
-    const size_t itemCount = dataSeries.lines.size() +
-                          dataSeries.points.size();
+    const size_t itemCount = dataSeries.lines.size() + dataSeries.points.size();
     const int itemVerticalSpace = charSize.second * 2;
 
     const uint16_t legendOffset = (m_layout.viewportMargins.right - rectWidth) / 2;
@@ -2034,7 +2033,7 @@ void cpplot2d::Plot2D::DrawLegend(DrawCommand& drawCommand, const WindowRect& vi
     legendRect.right = viewportRect.right + rectWidth;
     legendRect.bottom = viewportRect.top - itemVerticalSpace * ((static_cast<int>(itemCount) + 1));
     legendRect.top = viewportRect.top;
-    
+
     drawCommand.items.emplace_back(
         GuiRect({legendRect.left, legendRect.top}, {legendRect.right, legendRect.bottom},
                 m_props.theme.axes),
@@ -2055,13 +2054,13 @@ void cpplot2d::Plot2D::DrawLegend(DrawCommand& drawCommand, const WindowRect& vi
         // Representation
         drawCommand.items.emplace_back(
             GuiLine({x, y + halfCharHeight}, {x + iconWidth, y + halfCharHeight},
-                                               lineSeries.style.color.value()),
+                    lineSeries.style.color.value()),
             ZOrder::Z_LABELS);
 
         // label
-        drawCommand.items.emplace_back(
-            GuiText(lineSeries.label.substr(0, maxLabelSize), {textStartX, y}, textColor, Orientation::HORIZONTAL),
-            ZOrder::Z_LABELS, clip);
+        drawCommand.items.emplace_back(GuiText(lineSeries.label.substr(0, maxLabelSize),
+                                               {textStartX, y}, textColor, Orientation::HORIZONTAL),
+                                       ZOrder::Z_LABELS, clip);
 
         y -= itemVerticalSpace;
     }
@@ -2071,20 +2070,18 @@ void cpplot2d::Plot2D::DrawLegend(DrawCommand& drawCommand, const WindowRect& vi
         // Representation
         drawCommand.items.emplace_back(
             GuiCircle({x + iconWidth / 2, y + halfCharHeight}, iconWidth / 2, true,
-                                               scatterSeries.style.color.value()),
+                      scatterSeries.style.color.value()),
             ZOrder::Z_LABELS);
 
         // label
         drawCommand.items.emplace_back(GuiText(scatterSeries.label.substr(0, maxLabelSize),
                                                {textStartX, y}, textColor, Orientation::HORIZONTAL),
-            ZOrder::Z_LABELS, clip);
+                                       ZOrder::Z_LABELS, clip);
 
         y -= itemVerticalSpace;
     }
-
-
 }
-    
+
 void cpplot2d::Plot2D::DrawBasePlot(DrawCommand& drawCommand, IWindow* window)
 {
     WindowRect viewport = m_viewportRect;
