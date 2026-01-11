@@ -1,10 +1,3 @@
-> [!IMPORTANT]
-> **Project Status: In Progress**
->
-> _This project is actively being developed. Some features may be missing or incomplete._
-> 
-> Planned features (In progress): plot Legend, default color themes, hotkeys, action bar
-
 <p align="center">
   <img src="resources/cpplot2d_logotext.png" alt="logotext" width="600">
 </p>
