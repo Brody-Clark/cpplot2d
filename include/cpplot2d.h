@@ -926,7 +926,7 @@ struct Theme final
     }
 };
 
-// Series style properties
+// Series styles
 struct SeriesStyle
 {
     std::optional<Color> color;
@@ -940,6 +940,18 @@ struct ScatterStyle : public SeriesStyle
     std::optional<uint8_t> radius;
 };
 
+// Series properties
+struct LineProperties
+{
+    std::optional<LineStyle> style;
+    std::optional<std::string> label;
+};
+struct ScatterProperties
+{
+    std::optional<ScatterStyle> style;
+    std::optional<std::string> label;
+};
+
 // Plot appearance properties
 struct PlotProperties final
 {
@@ -947,10 +959,9 @@ struct PlotProperties final
     Theme theme = Theme::Dark();
     std::pair<int, int> defaultWindowSize = {800, 600};
     bool showGridLines = true;
-    //bool showLegend = false;
+    bool showLegend = false;
     bool enablePan = true;
     bool enableZoom = true;
-    //bool showStatsOverlay = false;
 };
 
 #ifdef CPPLOT2D_TEST
@@ -973,7 +984,7 @@ class Plot2D final
     */
     template <typename T>
     Plot2D& AddLine(const std::vector<T>& x, const std::vector<T>& y,
-                    std::optional<LineStyle> style = {});
+                    std::optional<LineProperties> props = std::nullopt);
 
     /**
      Adds a line series to the plot.
@@ -983,7 +994,7 @@ class Plot2D final
     */
     template <typename T>
     Plot2D& AddLine(const std::vector<std::pair<T, T>>& points,
-                    std::optional<LineStyle> style = {});
+                    std::optional<LineProperties> props = std::nullopt);
 
     /**
      Adds a scatter series to the plot.
@@ -994,7 +1005,7 @@ class Plot2D final
     */
     template <typename T>
     Plot2D& AddPoints(const std::vector<T>& x, const std::vector<T>& y,
-                      std::optional<ScatterStyle> style = {});
+                      std::optional<ScatterProperties> props = std::nullopt);
     /**
      Adds a scatter series to the plot.
      @tparam T Numeric type of the input data (e.g., double, double, int)
@@ -1003,7 +1014,7 @@ class Plot2D final
     */
     template <typename T>
     Plot2D& AddPoints(const std::vector<std::pair<T, T>>& points,
-                      std::optional<ScatterStyle> style = {});
+                      std::optional<ScatterProperties> props = std::nullopt);
 
     /**
      * Sets the plot theme.
@@ -1051,18 +1062,22 @@ class Plot2D final
     enum class InteractionMode : uint8_t
     {
         NONE = 0,
-        PAN_DEFAULT = 1,
-        ZOOM_DEFAULT = 2,
-        PAN_ACTIVE = 3,
-        ZOOM_ACTIVE = 4
+        DEFAULT = 1,
+        PAN_DEFAULT = 2,
+        ZOOM_DEFAULT = 3,
+        PAN_ACTIVE = 4,
+        ZOOM_ACTIVE = 5
     };
 
     // Data series
     class Series
     {
        public:
-        Series(const std::vector<double>& xs, const std::vector<double>& ys) : index(0)
+        Series(const std::vector<double>& xs, const std::vector<double>& ys,
+               const std::string& label)
+            : index(0)
         {
+            this->label = label.substr(0, 128);
             data.reserve(xs.size());
             for (int i = 0; i < xs.size(); i++)
             {
@@ -1074,6 +1089,7 @@ class Plot2D final
         std::vector<Pointd> data = {};
         std::vector<Point> transformedPoints = {};
         size_t index = 0;
+        std::string label = "";
     };
 
     // Series for line plots
@@ -1081,8 +1097,8 @@ class Plot2D final
     {
        public:
         LineSeries(const std::vector<double>& xs, const std::vector<double>& ys,
-                   const LineStyle& style)
-            : Series(xs, ys), style(style)
+                   const LineStyle& style, const std::string& label)
+            : Series(xs, ys, label), style(style)
         {
         }
         LineStyle style;
@@ -1093,8 +1109,8 @@ class Plot2D final
     {
        public:
         ScatterSeries(const std::vector<double>& xs, const std::vector<double>& ys,
-                      const ScatterStyle& style)
-            : Series(xs, ys), style(style)
+                      const ScatterStyle& style, const std::string& label)
+            : Series(xs, ys, label), style(style)
         {
         }
         ScatterStyle style;
@@ -1243,16 +1259,19 @@ class Plot2D final
 
     struct ViewportMargins
     {
-        int left;
-        int right;
-        int top;
-        int bottom;
+        uint16_t left;
+        uint16_t right;
+        uint16_t top;
+        uint16_t bottom;
     };
     struct Layout
     {
         static constexpr uint16_t actionBarHeight = 30;
         static constexpr uint8_t actionBarButtonSpacing = 5;
-        static constexpr ViewportMargins viewportMargins = {100, 60, 40 + actionBarHeight, 60};
+        ViewportMargins viewportMargins = {100, 40, 40 + actionBarHeight, 60};
+        static constexpr uint16_t legendWidth = 120;
+        static constexpr uint8_t legendXPadding = 4;
+        static constexpr uint8_t legendIconWidth = 8;
         static constexpr uint8_t plotCenterOffset = 10;
         static constexpr Dimension2d actionBarButtonSize = {40, 20};
         static constexpr uint8_t tickCount = 7;
@@ -1268,9 +1287,9 @@ class Plot2D final
 
     void Initialize();
     void DoAddLine(const std::vector<double>& xf, const std::vector<double>& yf,
-                   std::optional<LineStyle> style = std::nullopt);
+                   std::optional<LineProperties> props = std::nullopt);
     void DoAddScatter(const std::vector<double>& xf, const std::vector<double>& yf,
-                      std::optional<ScatterStyle> style = std::nullopt);
+                      std::optional<ScatterProperties> props = std::nullopt);
     WindowRectd PadRect(const WindowRectd& r, double padFrac);
     WindowRect GetActionBarRect(IWindow& w);
     ScatterStyle ResolveStyle(const ScatterStyle* userStyle, size_t seriesIndex);
@@ -1314,6 +1333,8 @@ class Plot2D final
     }
     void UpdatePlotDrawCommand(DrawCommand& drawCommand, IWindow* window);
     void DrawBasePlot(DrawCommand& drawCommand, IWindow* window);
+    void DrawLegend(DrawCommand& drawCommand, const WindowRect& viewportRect,
+                    DataSeries& dataSeries);
     void DrawActionBar(DrawCommand& drawCommand, IWindow* window);
     void DrawLinePlots(DrawCommand& drawCommand, const WindowRect& viewportRect,
                        DataSeries& dataSeries);
@@ -1333,7 +1354,7 @@ class Plot2D final
     WindowRect m_viewportRect = {0, 0, 0, 0};  // current viewport in window space
     Dimension2d m_plotCenter = {0, 0};
     int m_zoomRectIndex = -1;
-    InteractionMode m_interactionMode = InteractionMode::NONE;
+    InteractionMode m_interactionMode = InteractionMode::DEFAULT;
     int m_interactionTextIndex = -1;
     const std::string m_font = "helvetica";
     bool m_plotDirty = true;
@@ -1661,6 +1682,10 @@ void cpplot2d::Plot2D::Initialize()
 #else
     std::throw(std::exception("Unsupported platform."));
 #endif
+
+    m_xLabel = m_xLabel.substr(0, 512);
+    m_yLabel = m_yLabel.substr(0, 512);
+    title = title.substr(0, 512);
     // Initialize graphics context and create window
     m_graphicsContext->Init();
     m_window = std::unique_ptr<IWindow>(
@@ -1709,6 +1734,12 @@ void cpplot2d::Plot2D::Initialize()
         grabButton.label = "Grab";
         m_actionButtons.push_back(grabButton);
     }
+
+    if (m_props.showLegend)
+    {
+        m_layout.viewportMargins.right += m_layout.legendWidth;
+    }
+
 }
 void cpplot2d::Plot2D::SetTheme(const Theme& theme)
 {
@@ -1744,7 +1775,7 @@ void cpplot2d::Plot2D::UpdateDataBounds(const std::vector<double>& x, const std:
 
 template <typename T>
 cpplot2d::Plot2D& cpplot2d::Plot2D::AddLine(const std::vector<T>& x, const std::vector<T>& y,
-                                            std::optional<LineStyle> style)
+                                            std::optional<LineProperties> props)
 {
     static_assert(std::is_arithmetic<T>::value && !std::is_same<T, bool>::value,
                   "Plot2D requires a numeric type for T (bool is not allowed)");
@@ -1753,30 +1784,35 @@ cpplot2d::Plot2D& cpplot2d::Plot2D::AddLine(const std::vector<T>& x, const std::
     std::vector<double> xf(x.begin(), x.end());
     std::vector<double> yf(y.begin(), y.end());
 
-    DoAddLine(xf, yf, style);
+
+    DoAddLine(xf, yf, props);
 
     return *this;
 }
 void cpplot2d::Plot2D::DoAddLine(const std::vector<double>& xf, const std::vector<double>& yf,
-                                 std::optional<LineStyle> style)
+                                 std::optional<LineProperties> props)
 {
-    if (!style.has_value())
+    LineStyle style;
+    std::string label = (props && props.value().label) ? props.value().label.value()
+                                                       : std::string("Series " + std::to_string(m_nextSeriesIndex).substr(0, 256));
+
+    if (!props || !props.value().style.has_value())
     {
-        style = LineStyle{};
-        style->color = m_props.theme.GetSeriesColor(m_nextSeriesIndex++);
-        style->thickness = 1;
+        style.color = m_props.theme.GetSeriesColor(m_nextSeriesIndex++);
+        style.thickness = 1;
     }
     else
     {
-        style = ResolveStyle(&style.value(), m_nextSeriesIndex++);
+        style = ResolveStyle(&props.value().style.value(), m_nextSeriesIndex++);
     }
-    m_dataSeries.lines.emplace_back(xf, yf, style.value());
+    m_dataSeries.lines.emplace_back(xf, yf, style , label);
 
     UpdateDataBounds(xf, yf);
 }
 template <typename T>
-cpplot2d::Plot2D& cpplot2d::Plot2D::AddLine(const std::vector<std::pair<T, T>>& points,
-                                            std::optional<LineStyle> style)
+cpplot2d::Plot2D& cpplot2d::Plot2D::AddLine(
+    const std::vector<std::pair<T, T>>& points,
+                                            std::optional<LineProperties> props)
 {
     static_assert(std::is_arithmetic<T>::value && !std::is_same<T, bool>::value,
                   "Plot2D requires a numeric type for T (bool is not allowed)");
@@ -1795,20 +1831,22 @@ cpplot2d::Plot2D& cpplot2d::Plot2D::AddLine(const std::vector<std::pair<T, T>>& 
 }
 
 void cpplot2d::Plot2D::DoAddScatter(const std::vector<double>& xf, const std::vector<double>& yf,
-                                    std::optional<ScatterStyle> style)
+                                    std::optional<ScatterProperties> props)
 {
+    ScatterStyle style;
+    std::string label = (props && props.value().label) ? props.value().label.value()
+                            : std::string("Series " + std::to_string(m_nextSeriesIndex));
     // Sort the data ahead of time since the update loop will cull duplicates
-    if (!style.has_value())
+    if (!props || !props.value().style.has_value())
     {
-        style = ScatterStyle{};
-        style->color = m_props.theme.GetSeriesColor(m_nextSeriesIndex++);
-        style->radius = 1;
+        style.color = m_props.theme.GetSeriesColor(m_nextSeriesIndex++);
+        style.radius = 1;
     }
     else
     {
-        style = ResolveStyle(&style.value(), m_nextSeriesIndex++);
+        style = ResolveStyle(&props.value().style.value(), m_nextSeriesIndex++);
     }
-    ScatterSeries series(xf, yf, style.value());
+    ScatterSeries series(xf, yf, style, label);
     std::sort(series.transformedPoints.begin(), series.transformedPoints.end(),
               [](const Point& a, const Point& b)
               { return a.first < b.first || (a.first == b.first && a.first < b.first); });
@@ -1819,7 +1857,7 @@ void cpplot2d::Plot2D::DoAddScatter(const std::vector<double>& xf, const std::ve
 
 template <typename T>
 cpplot2d::Plot2D& cpplot2d::Plot2D::AddPoints(const std::vector<T>& x, const std::vector<T>& y,
-                                              std::optional<ScatterStyle> style)
+                                              std::optional<ScatterProperties> props)
 {
     static_assert(std::is_arithmetic<T>::value && !std::is_same<T, bool>::value,
                   "Plot2D requires a numeric type for T (bool is not allowed)");
@@ -1828,14 +1866,14 @@ cpplot2d::Plot2D& cpplot2d::Plot2D::AddPoints(const std::vector<T>& x, const std
     std::vector<double> xf(x.begin(), x.end());
     std::vector<double> yf(y.begin(), y.end());
 
-    DoAddScatter(xf, yf, style);
+    DoAddScatter(xf, yf, props);
 
     return *this;
 }
 
 template <typename T>
 cpplot2d::Plot2D& cpplot2d::Plot2D::AddPoints(const std::vector<std::pair<T, T>>& points,
-                                              std::optional<ScatterStyle> style)
+                                              std::optional<ScatterProperties> props)
 {
     static_assert(std::is_arithmetic<T>::value && !std::is_same<T, bool>::value,
                   "Plot2D requires a numeric type for T (bool is not allowed)");
@@ -1981,6 +2019,72 @@ inline std::string cpplot2d::Plot2D::GetInteractionText(const InteractionMode in
             return "";
     }
 }
+void cpplot2d::Plot2D::DrawLegend(DrawCommand& drawCommand, const WindowRect& viewportRect,
+                                  DataSeries& dataSeries)
+{
+    const uint16_t rectWidth = m_layout.legendWidth;
+    const Dimension2d charSize = m_charSize;
+    const size_t itemCount = dataSeries.lines.size() +
+                          dataSeries.points.size();
+    const int itemVerticalSpace = charSize.second * 2;
+
+    const uint16_t legendOffset = (m_layout.viewportMargins.right - rectWidth) / 2;
+    WindowRect legendRect;
+    legendRect.left = viewportRect.right + legendOffset;
+    legendRect.right = viewportRect.right + rectWidth;
+    legendRect.bottom = viewportRect.top - itemVerticalSpace * ((static_cast<int>(itemCount) + 1));
+    legendRect.top = viewportRect.top;
+    
+    drawCommand.items.emplace_back(
+        GuiRect({legendRect.left, legendRect.top}, {legendRect.right, legendRect.bottom},
+                m_props.theme.axes),
+        ZOrder::Z_AXES);
+
+    int y = viewportRect.top - itemVerticalSpace;
+    int x = legendRect.left + m_layout.legendXPadding;
+    int iconWidth = m_layout.legendIconWidth;
+    int textStartX = x + 4 + iconWidth;
+    Color textColor = m_props.theme.text;
+    const int maxLabelSize = (viewportRect.right + rectWidth - textStartX) / charSize.first - 3;
+    const int halfCharHeight = charSize.second / 2;
+    ClipRect clip;
+    clip.isEnabled = true;
+    clip.rect = legendRect;
+    for (LineSeries lineSeries : dataSeries.lines)
+    {
+        // Representation
+        drawCommand.items.emplace_back(
+            GuiLine({x, y + halfCharHeight}, {x + iconWidth, y + halfCharHeight},
+                                               lineSeries.style.color.value()),
+            ZOrder::Z_LABELS);
+
+        // label
+        drawCommand.items.emplace_back(
+            GuiText(lineSeries.label.substr(0, maxLabelSize), {textStartX, y}, textColor, Orientation::HORIZONTAL),
+            ZOrder::Z_LABELS, clip);
+
+        y -= itemVerticalSpace;
+    }
+
+    for (ScatterSeries scatterSeries : dataSeries.points)
+    {
+        // Representation
+        drawCommand.items.emplace_back(
+            GuiCircle({x + iconWidth / 2, y + halfCharHeight}, iconWidth / 2, true,
+                                               scatterSeries.style.color.value()),
+            ZOrder::Z_LABELS);
+
+        // label
+        drawCommand.items.emplace_back(GuiText(scatterSeries.label.substr(0, maxLabelSize),
+                                               {textStartX, y}, textColor, Orientation::HORIZONTAL),
+            ZOrder::Z_LABELS, clip);
+
+        y -= itemVerticalSpace;
+    }
+
+
+}
+    
 void cpplot2d::Plot2D::DrawBasePlot(DrawCommand& drawCommand, IWindow* window)
 {
     WindowRect viewport = m_viewportRect;
@@ -2293,6 +2397,10 @@ void cpplot2d::Plot2D::UpdatePlotDrawCommand(cpplot2d::Plot2D::DrawCommand& draw
     DrawBasePlot(drawCommand, window);
     DrawLinePlots(drawCommand, m_viewportRect, m_dataSeries);
     DrawScatterPlots(drawCommand, m_viewportRect, m_dataSeries);
+    if (m_props.showLegend)
+    {
+        DrawLegend(drawCommand, m_viewportRect, m_dataSeries);
+    }
 
     // Sort DrawCommand items by Z-order after setting the data
     std::stable_sort(drawCommand.items.begin(), drawCommand.items.end(),
@@ -2406,7 +2514,7 @@ void cpplot2d::Plot2D::OnMouseMoveCallback(IWindow& w, Point mousePos)
 {
     switch (m_interactionMode)
     {
-        case InteractionMode::NONE:
+        case InteractionMode::DEFAULT:
         {
             HandleMouseHover(w, mousePos);
             break;
@@ -2536,7 +2644,7 @@ void cpplot2d::Plot2D::OnMouseLButtonDownCallback(IWindow& w, Point mousePos)
     m_lastMousePos = mousePos;
     switch (m_interactionMode)
     {
-        case InteractionMode::NONE:
+        case InteractionMode::DEFAULT:
             break;
         case InteractionMode::PAN_DEFAULT:
             m_interactionMode = InteractionMode::PAN_ACTIVE;
@@ -2556,7 +2664,7 @@ void cpplot2d::Plot2D::OnMouseLButtonUpCallback(IWindow& w, Point mousePos)
 {
     switch (m_interactionMode)
     {
-        case InteractionMode::NONE:
+        case InteractionMode::DEFAULT:
         case InteractionMode::PAN_DEFAULT:
         case InteractionMode::ZOOM_DEFAULT:
             break;
@@ -2598,13 +2706,19 @@ void cpplot2d::Plot2D::Zoom(WindowRect zoomRect, IWindow& w)
 
 void cpplot2d::Plot2D::OnSaveClicked(IWindow& w)
 {
-    w.SaveScreenshot(title + "_" + w.GetTimestamp());
+    // Disable all interaction during screenshot operation
+    InteractionMode cur = m_interactionMode;
+    m_interactionMode = InteractionMode::NONE;
+
+    w.SaveScreenshot("cpplot2d_" + w.GetTimestamp());
+
+    m_interactionMode = cur;
 }
 void cpplot2d::Plot2D::OnToggleZoomClicked(IWindow& w)
 {
     if (m_interactionMode == InteractionMode::ZOOM_DEFAULT)
     {
-        m_interactionMode = InteractionMode::NONE;
+        m_interactionMode = InteractionMode::DEFAULT;
     }
     else
     {
@@ -2624,7 +2738,7 @@ void cpplot2d::Plot2D::OnToggleGrabClicked(IWindow& w)
 {
     if (m_interactionMode == InteractionMode::PAN_DEFAULT)
     {
-        m_interactionMode = InteractionMode::NONE;
+        m_interactionMode = InteractionMode::DEFAULT;
     }
     else
     {
