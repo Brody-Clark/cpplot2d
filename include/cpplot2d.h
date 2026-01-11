@@ -1826,7 +1826,7 @@ cpplot2d::Plot2D& cpplot2d::Plot2D::AddLine(
         yf[i] = points[i].second;
     }
 
-    DoAddLine(xf, yf, style);
+    DoAddLine(xf, yf, props);
     return *this;
 }
 
@@ -1887,7 +1887,7 @@ cpplot2d::Plot2D& cpplot2d::Plot2D::AddPoints(const std::vector<std::pair<T, T>>
         yf[i] = points[i].second;
     }
 
-    DoAddScatter(xf, yf, style);
+    DoAddScatter(xf, yf, props);
     return *this;
 }
 inline cpplot2d::ScatterStyle cpplot2d::Plot2D::ResolveStyle(const ScatterStyle* userStyle,
@@ -2672,6 +2672,7 @@ void cpplot2d::Plot2D::OnMouseLButtonUpCallback(IWindow& w, Point mousePos)
             m_interactionMode = InteractionMode::PAN_DEFAULT;
             break;
         case InteractionMode::ZOOM_ACTIVE:
+        {
             m_interactionMode = InteractionMode::ZOOM_DEFAULT;
             // Remove the zoom rect
             m_plotDrawCommand.items.pop_back();
@@ -2688,6 +2689,9 @@ void cpplot2d::Plot2D::OnMouseLButtonUpCallback(IWindow& w, Point mousePos)
             rect.top = std::clamp(std::max(m_lastMousePos.second, mousePos.second),
                                   m_viewportRect.bottom, m_viewportRect.top);
             Zoom(rect, w);
+            break;
+        }
+        default:
             break;
     }
 }

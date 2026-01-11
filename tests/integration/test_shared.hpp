@@ -76,7 +76,7 @@ TEST_CASE("Medium Scatter Plots", "[integration][performance][scatter][medium]")
     GetStraightDataset(x, y, 20000);
     GetStraightDataset(x2, y2, 20000);
     
-    cpplot2d::Plot2D plot("medium", "Test X", "Test Y");
+    cpplot2d::Plot2D plot("", "", "");
     cpplot2d::ScatterStyle style1;
     style1.radius = 3;
     cpplot2d::ScatterProperties sProps;
