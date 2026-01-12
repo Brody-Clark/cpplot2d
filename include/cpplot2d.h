@@ -485,12 +485,14 @@ extern NSString* const MouseUpNotification = @"MouseUpNotification";
 
 // Window delegate to handle close event
 @interface WindowDelegate : NSObject <NSWindowDelegate>
+@property(nonatomic) std::function<void()> onClose;
 @end
 
 @implementation WindowDelegate
 - (void)windowWillClose:(NSNotification*)notification
 {
     [NSApp stop:nil];  // Stops the event loop when the window closes
+    if (self.onClose) self.onClose();
 }
 @end
 
@@ -583,6 +585,29 @@ extern NSString* const MouseUpNotification = @"MouseUpNotification";
     // Restore the graphics context
     [context restoreGraphicsState];
 }
+
+- (void)drawCenterAlignedText:(NSString*)text
+                      atPoint:(NSPoint)point
+                        color:(NSColor*)color
+                     fontName:(NSString*)fontName
+                         size:(int)size
+{
+    NSFont* customFont = [self getFontWithName:fontName size:size];
+    NSMutableParagraphStyle* style = [[NSMutableParagraphStyle alloc] init];
+    [style setAlignment:NSTextAlignmentRight];
+
+    NSDictionary* attributes = @{
+        NSFontAttributeName : customFont,
+        NSForegroundColorAttributeName : color,
+        NSParagraphStyleAttributeName : style
+    };
+
+    NSSize textSize = [text sizeWithAttributes:attributes];
+    NSPoint adjustedPoint = NSMakePoint(point.x - textSize.width / 2, point.y);
+
+    [text drawAtPoint:adjustedPoint withAttributes:attributes];
+}
+
 - (void)drawRightAlignedText:(NSString*)text
                      atPoint:(NSPoint)point
                        color:(NSColor*)color
@@ -618,13 +643,21 @@ extern NSString* const MouseUpNotification = @"MouseUpNotification";
                   fontName:[NSString stringWithUTF8String:text.font.c_str()]
                       size:text.size];
         }
-        else
+        else if (text.alignment == cpplot2d::detail::Alignment::RIGHT)
         {
             [self drawRightAlignedText:[NSString stringWithUTF8String:text.text.c_str()]
                                atPoint:NSMakePoint(text.pos.first, text.pos.second)
                                  color:color
                               fontName:[NSString stringWithUTF8String:text.font.c_str()]
                                   size:text.size];
+        }
+        else
+        {
+            [self drawCenterAlignedText:[NSString stringWithUTF8String:text.text.c_str()]
+                                atPoint:NSMakePoint(text.pos.first, text.pos.second)
+                                  color:color
+                               fontName:[NSString stringWithUTF8String:text.font.c_str()]
+                                   size:text.size];
         }
     }
     else if (text.orientation == cpplot2d::detail::Orientation::VERTICAL)
@@ -1653,11 +1686,13 @@ class Plot2D final
         void* m_nsWindow;
         void* m_mainMenu;
         void* m_windowView;
+        void* m_windowDelegate;
         void* m_resizeObserver;
         void* m_mouseMoveObserver;
         void* m_mouseDownObserver;
         void* m_mouseUpObserver;
         std::function<void()> m_drawCallback = nullptr;
+        std::function<void()> m_closeCallback = nullptr;
         WindowRect m_invalidatedRect;
         std::map<Color, void*> m_colorMap = {};
 
@@ -3629,8 +3664,15 @@ Plot2D::CocoaWindow::CocoaWindow(Dimension2d m_defaultWindowSize, Dimension2d po
     [window setAcceptsMouseMovedEvents:YES];
 
     // Create and attach a delegate to handle window close
+    m_closeCallback = [this]()
+    {
+        if (OnCloseCallback) this->OnCloseCallback();
+    };
+
     WindowDelegate* delegate = [[WindowDelegate alloc] init];
     [window setDelegate:delegate];
+    m_windowDelegate = (void*)delegate;
+    delegate.onClose = m_closeCallback;
 
     NSMenu* mainMenu = [[NSMenu alloc] init];
     m_mainMenu = (void*)mainMenu;
@@ -3742,6 +3784,17 @@ inline void Plot2D::CocoaWindow::OnMouseLButtonUp(int x, int y)
 
 inline Plot2D::CocoaWindow::~CocoaWindow()
 {
+    if (m_windowDelegate)
+    {
+        id delegate = reinterpret_cast<id>(m_windowDelegate);
+
+        NSWindow* window = reinterpret_cast<NSWindow*>(m_nsWindow);
+        [window setDelegate:nil];
+
+        [delegate release];
+        m_windowDelegate = nullptr;
+    }
+
     NSWindow* window = reinterpret_cast<NSWindow*>(m_nsWindow);
     [window release];
 
@@ -3767,6 +3820,7 @@ inline Plot2D::CocoaWindow::~CocoaWindow()
     m_colorMap.clear();
 
     m_drawCallback = nullptr;
+    m_closeCallback = nullptr;
 }
 
 cpplot2d::Plot2D::Dimension2d Plot2D::CocoaWindow::GetAverageCharSize()
