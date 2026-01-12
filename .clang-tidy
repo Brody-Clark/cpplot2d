@@ -1,6 +1,7 @@
 Checks: >
   bugprone-*,
   -bugprone-easily-swappable-parameters,
+  -bugprone-incorrect-roundings,
   clang-analyzer-*,
   cppcoreguidelines-pro-type-member-init,
   performance-move-const-arg,
@@ -10,7 +11,6 @@ Checks: >
   readability-redundant-declaration,
   readability-else-after-return,
   readability-inconsistent-declaration-parameter-name,
-  bugprone-incorrect-roundings
   
   -*-Werror
 

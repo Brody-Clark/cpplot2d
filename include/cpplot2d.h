@@ -1591,15 +1591,15 @@ class Plot2D final
         void HandleEvent(XEvent ev);
 
        private:
-        Dimension2d m_windowDimensions;
-        WindowRect m_invalidatedRect;
+        Dimension2d m_windowDimensions = {};
+        WindowRect m_invalidatedRect = {};
         Pixmap m_backBuffer = 0;
-        unsigned long m_backgroundColor;
+        unsigned long m_backgroundColor = 0;
         Display* m_display = nullptr;
         ::Window m_window;
-        int m_screen;
+        int m_screen = 0;
         GC m_gc;
-        Atom m_wmDelete;
+        Atom m_wmDelete = 0;
         bool m_running = false;
         std::unordered_map<uint32_t, unsigned long> m_colorCache;
         std::unordered_map<int, XFontStruct*> m_sizeToFontCache;
@@ -1713,8 +1713,7 @@ void cpplot2d::Plot2D::Initialize()
         m_graphicsContext->MakeWindow(m_props.theme.background, m_defaultWindowSize, false, title));
 
     m_running = m_window != nullptr;
-    if(!m_running)
-        return;
+    if (!m_running) return;
 
     m_charSize = m_window->GetAverageCharSize();
     m_mouseCoordinateRectOffset = {40 * m_charSize.first, 2 * m_charSize.second};
@@ -1729,8 +1728,8 @@ void cpplot2d::Plot2D::Initialize()
     m_window->OnResizeCallback = [this]() { this->OnWindowResizeCallback(*m_window); };
     m_window->OnResizeEndCallback = [this]() { this->OnWindowResizeCallback(*m_window); };
     m_window->OnDrawCallback = [this]() { this->OnDrawWindowCallback(*m_window); };
-    m_window->OnCloseCallback = [this]() {this->OnWindowClosedCallback(*m_window); };
-    
+    m_window->OnCloseCallback = [this]() { this->OnWindowClosedCallback(*m_window); };
+
     // Add action menu buttons
     ActionButton saveButton;
     saveButton.callback = [this]() { this->OnSaveClicked(*m_window); };
@@ -4262,6 +4261,7 @@ inline void cpplot2d::Plot2D::X11Window::HandleEvent(XEvent ev)
             if ((Atom)ev.xclient.data.l[0] == m_wmDelete)
             {
                 m_running = false;
+                if (OnCloseCallback) OnCloseCallback();
             }
             break;
         default:
