@@ -10,6 +10,7 @@ Checks: >
   readability-redundant-declaration,
   readability-else-after-return,
   readability-inconsistent-declaration-parameter-name,
+  bugprone-incorrect-roundings
   
   -*-Werror
 
