@@ -1,6 +1,7 @@
 Checks: >
   bugprone-*,
   -bugprone-easily-swappable-parameters,
+  -bugprone-incorrect-roundings,
   clang-analyzer-*,
   cppcoreguidelines-pro-type-member-init,
   performance-move-const-arg,

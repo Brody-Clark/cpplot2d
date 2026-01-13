@@ -37,7 +37,9 @@ TEST_CASE("Small Scatter Plots", "[integration][performance][scatter][small]")
     sProps.style = style1;
     sProps.label = "WWWWWWWWWWWWWWWWWWWWWWWWW";
     plot.AddPoints(x, y, sProps).AddLine(x, y);
-    plot.Show();
+    plot.Show(false);
+    while(plot.Running())
+        plot.Update();
 }
 TEST_CASE("Text Overflow", "[integration][performance][UI][text_overflow]")
 {
