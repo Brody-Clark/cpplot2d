@@ -216,7 +216,7 @@ using Pointd = std::pair<double, double>;
 // 2D dimension (x, y)
 using Dimension2d = std::pair<int, int>;
 
-// 2D doubleing point dimension (x, y)
+// 2D double dimension (x, y)
 using Dimension2dd = std::pair<double, double>;
 
 // Text orientation
@@ -298,7 +298,7 @@ struct WindowRectd final
     double bottom = 0.0;
 };
 
-// Represents a polyline to be drawn in the window. More efficient than multiple lines.
+// Represents a polyline to be drawn in the window
 struct GuiPolyline final
 {
    public:
@@ -1370,14 +1370,10 @@ class Plot2D final
     void HandlePanDrag(IWindow& w, Point mousePos);
     void Zoom(WindowRect rect, IWindow& w);
     inline bool IsPointInsideRect(const Point& p, const WindowRect& rect) noexcept;
-    inline int FastRound(double x)
-    {
-        return static_cast<int>(x + (x >= 0 ? 0.5 : -0.5));
-    }
     void SetViewportRect(const WindowRect& rect);
-    Dimension2dd GetTransformationScales(const WindowRect& viewport, const WindowRectd& dataView);
+    Dimension2dd GetTransformationScales(const WindowRect& viewport, const WindowRectd& dataView) const;
     void GetTransformedPoint(const WindowRect& viewport, const WindowRectd& dataView,
-                             const Dimension2dd& scales, const Pointd& point, Point& out);
+                             const Dimension2dd& scales, const Pointd& point, Point& out) const;
     inline void GetTransformedPointFast(const double sx, const double sy, const double ox,
                                         const double oy, const Pointd& p, Point& out) noexcept
     {
@@ -1428,6 +1424,7 @@ class Plot2D final
     Dimension2d m_defaultWindowSize = {800, 600};
     PlotProperties m_props;
     std::vector<ActionButton> m_actionButtons = {};
+    const uint8_t m_scatterPointScale = 2;
 
 #ifdef CPPLOT2D_HEADLESS  // Null/Headless implementation
     class NullWindow : public cpplot2d::Plot2D::IWindow
@@ -2259,7 +2256,7 @@ void cpplot2d::Plot2D::DrawBasePlot(DrawCommand& drawCommand, IWindow* window)
         ZOrder::Z_LABELS);
 }
 inline cpplot2d::Plot2D::Dimension2dd cpplot2d::Plot2D::GetTransformationScales(
-    const WindowRect& viewport, const WindowRectd& dataView)
+    const WindowRect& viewport, const WindowRectd& dataView) const
 {
     return {double(viewport.Width()) / (dataView.Width()),
             double(viewport.Height()) / (dataView.Height())};
@@ -2268,7 +2265,7 @@ inline cpplot2d::Plot2D::Dimension2dd cpplot2d::Plot2D::GetTransformationScales(
 inline void cpplot2d::Plot2D::GetTransformedPoint(const WindowRect& viewport,
                                                   const WindowRectd& dataView,
                                                   const Dimension2dd& scales, const Pointd& point,
-                                                  Point& out)
+                                                  Point& out) const
 {
     const double ox = viewport.left - dataView.left * scales.first;
     const double oy = viewport.bottom - dataView.bottom * scales.second;
@@ -2437,7 +2434,7 @@ inline void cpplot2d::Plot2D::DrawScatterPlot(DrawCommand& drawCommand,
 
     auto& item = drawCommand.items.emplace_back();
     item.payload.emplace<GuiPointCloud>(series.transformedPoints, series.style.color,
-                                        series.style.radius);
+                                        series.style.radius * m_scatterPointScale);
     item.z = ZOrder::Z_DATA;
     ClipRect clip;
     clip.rect = viewportRect;
@@ -4407,12 +4404,12 @@ void cpplot2d::Plot2D::X11Window::Draw(const GuiCircle& circle)
 
     if (circle.isFilled)
     {
-        XFillArc(m_display, m_backBuffer, m_gc, x, y, d, d, 0, 360 * 64);
+        XFillArc(m_display, m_backBuffer, m_gc, x, y, d, d, 0, 23040); // 23040 is 360 * 64 (angle)
     }
     else
     {
         XSetLineAttributes(m_display, m_gc, circle.borderThickness, LineSolid, CapRound, JoinRound);
-        XDrawArc(m_display, m_backBuffer, m_gc, x, y, d, d, 0, 360 * 64);
+        XDrawArc(m_display, m_backBuffer, m_gc, x, y, d, d, 0, 23040);
     }
 }
 void cpplot2d::Plot2D::X11Window::Draw(const GuiText& text)
@@ -4464,7 +4461,7 @@ void cpplot2d::Plot2D::X11Window::Draw(const GuiPointCloud& pointcloud)
 {
     Dimension2d size = m_windowDimensions;
     XSetForeground(m_display, m_gc, ToX11Pixel(pointcloud.color));
-    int angle = 360 * 64;
+    int angle = 23040; // 360 * 64
     int d = pointcloud.radius * 2;
     for (auto& p : pointcloud.points)
     {

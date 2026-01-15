@@ -9,11 +9,12 @@
 
 ## About
 
-**cpplot2d** is a cross-platform, single header-only 2D plotting library for C++ designed for speed and simplicity. The library is:
+**cpplot2d** is a cross-platform, single header-only 2D plotting library for C++ designed for quick data visualization. The library is:
 
 - Easy to use (a single header file to include and simple API)
 - Self-contained (no external dependencies)
-- Capable of displaying plots or saving them as images (**_.png_** on **Windows/Apple** and **_.ppm_** on **Linux**)
+- Capable of displaying **line** and **scatter** plots or saving them as images (**_.png_** on **Windows/Apple** and **_.ppm_** on **Linux**)
+- Equipped with panning and zooming features
 - Responsive even with large datasets
 
 ## Requirements
@@ -103,7 +104,7 @@ clang++ main.mm -framework Cocoa -framework CoreGraphics -o my_plot
 
 ## Examples
 
-### Simple line plot
+### Line plot
 
 ```cpp
 
@@ -162,13 +163,16 @@ int main()
 
     // Create plot object with custom label and add 2 lines with custom styles
     cpplot2d::Plot2D plot("Title", "X Label", "Y Label");
-    cpplot2d::ScatterStyle scatterStyle;  // Style for scatter series 1
+
+    // Style for scatter series
+    cpplot2d::ScatterStyle scatterStyle;
     scatterStyle.radius = 3;
     cpplot2d::ScatterProperties scatterProps;
     scatterProps.style = scatterStyle;
     scatterProps.label = "My Scatter";
 
-    cpplot2d::LineStyle lineStyle;  // Style for line series
+    // Style for line series
+    cpplot2d::LineStyle lineStyle;  
     lineStyle.thickness = 1;
     cpplot2d::LineProperties lineProps;
     lineProps.style = lineStyle;
@@ -213,7 +217,7 @@ int main()
 
 ## Contributing
 
-Contributions are welcome! Please see [CONTRIBUTING.md](./CONTRIBUTING.md) for more info.
+Contributions are welcome. Please see [CONTRIBUTING.md](./CONTRIBUTING.md) for more info.
 
 ## License
 
