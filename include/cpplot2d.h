@@ -11,7 +11,7 @@
  *             ░██        ░██
  *
  *
- *  cpplot2d v1.2.0-dev
+ *  cpplot2d v1.2.0
  *
  *  A cross-platform, single-header, C++ plotting library with zero third-party dependencies.
  *
@@ -42,7 +42,7 @@
 #define CPPLOT2D_VERSION_MAJOR 1
 #define CPPLOT2D_VERSION_MINOR 2
 #define CPPLOT2D_VERSION_PATCH 0
-#define CPPLOT2D_VERSION "1.2.0-dev"
+#define CPPLOT2D_VERSION "1.2.0"
 
 #include <algorithm>
 #include <cassert>
