@@ -2075,11 +2075,15 @@ void cpplot2d::Plot2D::UpdatePlotDrawCommand(cpplot2d::Plot2D::DrawCommand& draw
 inline bool cpplot2d::Plot2D::DoPointsIntersectRect(const Point& p1, const Point& p2,
                                                     const WindowRect& rect)
 {
-    // TODO: Simple solution for now, but should improve check performance
-    // If 2 points known to be outside a rect intersect any lines on that rect, they will
-    // also intersect the lines created by diagonal points on that rect.
-    // Check only those diagonal lines here since checking 2 line intersects is faster than
-    // checking 4.
+    if ((p1.first < rect.left && p2.first < rect.left) ||
+        (p1.first > rect.right && p2.first > rect.right) ||
+        (p1.second < rect.bottom && p2.second < rect.bottom) ||
+        (p1.second > rect.top && p2.second > rect.top))
+    {
+        return false;
+    }
+
+    // A segment crossing the rectangle must also cross at least one diagonal.
     if (SegmentsIntersect(p1, p2, {rect.left, rect.top}, {rect.right, rect.bottom}))
     {
         return true;
@@ -3630,7 +3634,6 @@ cpplot2d::Plot2D::X11Window::X11Window(Dimension2d m_defaultWindowSize, Dimensio
     XStoreName(m_display, m_window, title.c_str());
 
     // Create graphics context
-    // TODO: GC cache
     m_gc = XCreateGC(m_display, m_window, 0, nullptr);
     XSetLineAttributes(m_display, m_gc,
                        1,  // line width
