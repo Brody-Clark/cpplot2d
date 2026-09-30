@@ -1,10 +1,3 @@
-> [!IMPORTANT]
-> **Project Status: In Progress**
->
-> _This project is actively being developed. Some features may be missing or incomplete._
-> 
-> Planned features (In progress): plot Legend, default color themes, hotkeys, action bar
-
 <p align="center">
   <img src="resources/cpplot2d_logotext.png" alt="logotext" width="600">
 </p>
@@ -16,11 +9,12 @@
 
 ## About
 
-**cpplot2d** is a cross-platform, single header-only 2D plotting library for C++ designed for speed and simplicity. The library is:
+**cpplot2d** is a cross-platform, single header-only 2D plotting library for C++ designed for quick data visualization. The library is:
 
 - Easy to use (a single header file to include and simple API)
 - Self-contained (no external dependencies)
-- Capable of displaying plots or saving them as images (**_.png_** on **Windows/Apple** and **_.ppm_** on **Linux**)
+- Capable of displaying **line** and **scatter** plots or saving them as images (**_.png_** on **Windows/Apple** and **_.ppm_** on **Linux**)
+- Equipped with panning and zooming features
 - Responsive even with large datasets
 
 ## Requirements
@@ -30,7 +24,7 @@
 
 ## Usage
 
-This library is contained a single header file located at `include/cpplot2d.h`, you can also [download the latest stable release here](https://github.com/Brody-Clark/cpplot2d/releases/latest/download/cpplot2d.h).
+This library is contained in a single header file located at `include/cpplot2d.h`, you can also [download the latest stable release here](https://github.com/Brody-Clark/cpplot2d/releases).
 
 ### Windows/Linux
 
@@ -110,7 +104,7 @@ clang++ main.mm -framework Cocoa -framework CoreGraphics -o my_plot
 
 ## Examples
 
-### Simple line plot
+### Line plot
 
 ```cpp
 
@@ -124,39 +118,14 @@ int main()
 
     // Create plot object and add a line 
     cpplot2d::Plot2D plot;
-    plot.AddLine(x, y, cpplot2d::Color::FromRGB(0, 255, 0));
+    plot.AddLine(x, y);
     
     // Show the plot
     plot.Show();
 
 }
+
 ```
-
-### Multiple Lines
-
-```cpp
-
-#include "cpplot2d.h"
-
-int main()
-{
-    // Create datasets
-    std::vector<float> x1 = {1,2,3};
-    std::vector<float> y1 = {1,2,3};
-    std::vector<float> x2 = {4,5,6};
-    std::vector<float> y2 = {4,5,6};
-
-    // Create plot object and add 2 lines 
-    cpplot2d::Plot2D plot;
-    plot.AddLine(x1, y1, cpplot2d::Color::FromRGB(0, 255, 0))
-        .AddLine(x2, y2, cpplot2d::Color::FromRGB(255, 255, 0));
-    
-    // Show the plot
-    plot.Show();
-
-}
-```
-
 ### Scatter plot
 
 ```cpp
@@ -166,15 +135,78 @@ int main()
 int main()
 {
     // Create datasets
+    std::vector<float> x = {1,2,3};
+    std::vector<float> y = {1,2,3};
+
+    cpplot2d::Plot2D plot;
+    plot.AddPoints(x, y);
+    
+    // Show the plot
+    plot.Show();
+}
+
+```
+
+### Line and Scatter plots with Custom Styles
+
+```cpp
+
+#include "cpplot2d.h"
+
+int main()
+{
+    // Create datasets
+    std::vector<float> x1 = {1, 2, 3};
+    std::vector<float> y1 = {1, 2, 3};
+    std::vector<float> x2 = {4, 5, 6};
+    std::vector<float> y2 = {4, 5, 6};
+
+    // Create plot object with custom label and add 2 lines with custom styles
+    cpplot2d::Plot2D plot("Title", "X Label", "Y Label");
+
+    // Style for scatter series
+    cpplot2d::ScatterStyle scatterStyle;
+    scatterStyle.radius = 3;
+    cpplot2d::ScatterProperties scatterProps;
+    scatterProps.style = scatterStyle;
+    scatterProps.label = "My Scatter";
+
+    // Style for line series
+    cpplot2d::LineStyle lineStyle;  
+    lineStyle.thickness = 1;
+    cpplot2d::LineProperties lineProps;
+    lineProps.style = lineStyle;
+    lineProps.label = "My Line";
+
+    // Add Series with their custom properties
+    plot.AddPoints(x1, y1, scatterProps).AddLine(x2, y2, lineProps);
+
+    // Show the plot
+    plot.Show();
+
+}
+```
+
+### Plot with Custom Properties
+
+```cpp
+
+#include "cpplot2d.h"
+
+int main()
+{
+    // Create datasets
     std::vector<float> x1 = {1,2,3};
     std::vector<float> y1 = {1,2,3};
-    std::vector<float> x2 = {4,5,6};
-    std::vector<float> y2 = {4,5,6};
 
-    // Create plot object and add 2 point sets with radii 1 and 2 respectively
-    cpplot2d::Plot2D plot;
-    plot.AddPoints(x1, y1, cpplot2d::Color::FromRGB(0, 255, 0), 1)
-        .AddPoints(x2, y2, cpplot2d::Color::FromRGB(255, 255, 0), 2);
+    // Create plot object with High Contrast theme, no grid lines, and visible plot legend
+    cpplot2d::PlotProperties props;
+    props.theme = cpplot2d::Theme::HighContrast();
+    props.showLegend = true;
+    props.showGridLines = false;
+
+    cpplot2d::Plot2D plot("my plot", "X", "Y", props);
+    plot.AddPoints(x1, y1);
     
     // Show the plot
     plot.Show();
@@ -185,7 +217,7 @@ int main()
 
 ## Contributing
 
-Contributions are welcome! Please see [CONTRIBUTING.md](./CONTRIBUTING.md) for more info.
+Contributions are welcome. Please see [CONTRIBUTING.md](./CONTRIBUTING.md) for more info.
 
 ## License
 

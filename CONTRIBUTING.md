@@ -1,6 +1,6 @@
 # Contributing to cpplot2d
 
-This project aims to be a **minimal, fast, header-only, cross-platform 2D plotting library in C++**, with no third-party runtime dependencies.
+This project aims to be a **minimal, fast, easy-to-use, header-only, cross-platform 2D plotting library in C++**, with no third-party runtime dependencies.
 
 To keep the codebase clean, stable, and easy to maintain, please follow the guidelines below.
 
