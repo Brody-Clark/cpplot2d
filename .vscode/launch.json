@@ -8,7 +8,7 @@
             "program": "${workspaceFolder}/build/test_plot_mac",
             "args": [],
             "cwd": "${workspaceFolder}",
-            "preLaunchTask": "CMake: build",
+            "preLaunchTask": "CMake: build"
         },
         {
             "name": "C++ Debug Test Plot(Linux)",
@@ -17,16 +17,16 @@
             "program": "${workspaceFolder}/build/test_plot",
             "args": [],
             "cwd": "${workspaceFolder}",
-            "preLaunchTask": "CMake: build",
+            "preLaunchTask": "CMake: build"
         },
         {
-            "name": "C++ Debug Test Plot(Windows)",
+            "name": "C++ Debug (Windows, active CMake target)",
             "type": "cppvsdbg",
             "request": "launch",
-            "program": "${workspaceFolder}/build/Debug/test_plot.exe",
+            "program": "${command:cmake.launchTargetPath}",
             "args": [],
             "cwd": "${workspaceFolder}",
-            "preLaunchTask": "CMake: build",
+            "preLaunchTask": "CMake: build"
         },
         {
             "name": "C++ Debug Unit Tests(Linux)",
@@ -35,16 +35,7 @@
             "program": "${workspaceFolder}/build/test_cpplot2d",
             "args": [],
             "cwd": "${workspaceFolder}",
-            "preLaunchTask": "CMake: build",
-        },
-        {
-            "name": "C++ Debug Unit Tests(Windows)",
-            "type": "cppvsdbg",
-            "request": "launch",
-            "program": "${workspaceFolder}/build/Debug/test_cpplot2d.exe",
-            "args": [],
-            "cwd": "${workspaceFolder}",
-            "preLaunchTask": "CMake: build",
+            "preLaunchTask": "CMake: build"
         }
     ]
 }

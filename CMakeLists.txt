@@ -24,7 +24,7 @@ include(FetchContent)
 FetchContent_Declare(
     catch2
     GIT_REPOSITORY https://github.com/catchorg/Catch2.git
-    GIT_TAG v3.7.0  # use a stable version
+    GIT_TAG v3.7.0
 )
 FetchContent_MakeAvailable(catch2)
 
@@ -93,6 +93,10 @@ FetchContent_Declare(
 set(BENCHMARK_ENABLE_TESTING OFF)
 set(BENCHMARK_ENABLE_INSTALL OFF)
 FetchContent_MakeAvailable(benchmark)
+
+if (CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+    target_compile_options(benchmark PRIVATE -Wno-invalid-offsetof)
+endif()
 
 # Create benchmark executable
 add_executable(bench_cpplot2d

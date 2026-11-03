@@ -1286,7 +1286,7 @@ class Plot2D final
         virtual ~IGraphicsContext() = default;
         virtual void Init() = 0;
         virtual void Shutdown() = 0;
-        virtual Plot2D::IWindow* MakeWindow(Color color, Dimension2d defaultSize, bool isVisible,
+        virtual Plot2D::IWindow* MakeWindow(Color color, Dimension2d defaultSize,
                                             const std::string& title) = 0;
     };
 
@@ -1371,7 +1371,8 @@ class Plot2D final
     void Zoom(WindowRect rect, IWindow& w);
     inline bool IsPointInsideRect(const Point& p, const WindowRect& rect) noexcept;
     void SetViewportRect(const WindowRect& rect);
-    Dimension2dd GetTransformationScales(const WindowRect& viewport, const WindowRectd& dataView) const;
+    Dimension2dd GetTransformationScales(const WindowRect& viewport,
+                                         const WindowRectd& dataView) const;
     void GetTransformedPoint(const WindowRect& viewport, const WindowRectd& dataView,
                              const Dimension2dd& scales, const Pointd& point, Point& out) const;
     inline void GetTransformedPointFast(const double sx, const double sy, const double ox,
@@ -1471,7 +1472,7 @@ class Plot2D final
        public:
         void Init() override;
         void Shutdown() override;
-        IWindow* MakeWindow(Color color, Dimension2d defaultSize, bool isVisible,
+        IWindow* MakeWindow(Color color, Dimension2d defaultSize,
                             const std::string& title) override;
     };
 #endif
@@ -1481,7 +1482,7 @@ class Plot2D final
        public:
         void Init() override;
         void Shutdown() override;
-        IWindow* MakeWindow(Color color, Dimension2d defaultSize, bool isVisible,
+        IWindow* MakeWindow(Color color, Dimension2d defaultSize,
                             const std::string& title) override;
 
        protected:
@@ -1542,6 +1543,7 @@ class Plot2D final
         HMENU m_hMenu = nullptr;
         RECT m_invalidatedRegion = {};
         Dimension2d m_windowDimensions;
+        Color m_backgroundColor;
         std::map<int, std::function<void()>> m_menuCommands;
         bool m_drawnOnce = false;
         std::map<Color, HPEN> m_pens;
@@ -1575,7 +1577,7 @@ class Plot2D final
        public:
         void Init() override;
         void Shutdown() override;
-        IWindow* MakeWindow(Color color, Dimension2d defaultSize, bool isVisible,
+        IWindow* MakeWindow(Color color, Dimension2d defaultSize,
                             const std::string& title) override;
     };
 
@@ -1643,7 +1645,7 @@ class Plot2D final
        public:
         void Init() override;
         void Shutdown() override;
-        IWindow* MakeWindow(Color color, Dimension2d defaultSize, bool isVisible,
+        IWindow* MakeWindow(Color color, Dimension2d defaultSize,
                             const std::string& title) override;
     };
 
@@ -1742,7 +1744,7 @@ void cpplot2d::Plot2D::Initialize()
     // Initialize graphics context and create window
     m_graphicsContext->Init();
     m_window = std::unique_ptr<IWindow>(
-        m_graphicsContext->MakeWindow(m_props.theme.background, m_defaultWindowSize, false, title));
+        m_graphicsContext->MakeWindow(m_props.theme.background, m_defaultWindowSize, title));
 
     m_running = m_window != nullptr;
     if (!m_running) return;
@@ -2468,11 +2470,15 @@ void cpplot2d::Plot2D::UpdatePlotDrawCommand(cpplot2d::Plot2D::DrawCommand& draw
 inline bool cpplot2d::Plot2D::DoPointsIntersectRect(const Point& p1, const Point& p2,
                                                     const WindowRect& rect)
 {
-    // TODO: Simple solution for now, but should improve check performance
-    // If 2 points known to be outside a rect intersect any lines on that rect, they will
-    // also intersect the lines created by diagonal points on that rect.
-    // Check only those diagonal lines here since checking 2 line intersects is faster than
-    // checking 4.
+    if ((p1.first < rect.left && p2.first < rect.left) ||
+        (p1.first > rect.right && p2.first > rect.right) ||
+        (p1.second < rect.bottom && p2.second < rect.bottom) ||
+        (p1.second > rect.top && p2.second > rect.top))
+    {
+        return false;
+    }
+
+    // A segment crossing the rectangle must also cross at least one diagonal.
     if (SegmentsIntersect(p1, p2, {rect.left, rect.top}, {rect.right, rect.bottom}))
     {
         return true;
@@ -2831,7 +2837,7 @@ void cpplot2d::Plot2D::NullGraphicsContext::Shutdown()
 {
 }
 cpplot2d::Plot2D::IWindow* cpplot2d::Plot2D::NullGraphicsContext::MakeWindow(
-    Color color, Dimension2d defaultSize, bool isVisible, const std::string& title)
+    Color color, Dimension2d defaultSize, const std::string& title)
 {
     return new cpplot2d::Plot2D::NullWindow();
 }
@@ -2909,7 +2915,7 @@ void cpplot2d::Plot2D::Win32GraphicsContext::Shutdown()
 }
 
 cpplot2d::Plot2D::IWindow* cpplot2d::Plot2D::Win32GraphicsContext::MakeWindow(
-    Color color, Dimension2d defaultSize, bool isVisible, const std::string& title)
+    Color color, Dimension2d defaultSize, const std::string& title)
 {
     return new cpplot2d::Plot2D::Win32Window(defaultSize, Dimension2d(0, 0), title, color);
 }
@@ -2917,13 +2923,14 @@ cpplot2d::Plot2D::Win32Window::Win32Window(Dimension2d m_defaultWindowSize, Dime
                                            std::string title, Color color)
 {
     m_windowDimensions = m_defaultWindowSize;
+    m_backgroundColor = color;
     // Register window class
     WNDCLASS wc = {};
     wc.lpfnWndProc = WindowProc;
     wc.style = CS_HREDRAW | CS_VREDRAW;
     wc.hInstance = GetModuleHandle(nullptr);
     wc.lpszClassName = TEXT("PlotWindowClass");
-    wc.hbrBackground = (HBRUSH)(COLOR_WINDOW + 1);
+    wc.hbrBackground = nullptr;
 
     if (!RegisterClass(&wc))
     {
@@ -2963,6 +2970,17 @@ cpplot2d::Plot2D::Win32Window::~Win32Window()
 {
     DestroyMenu(m_hMenu);
     DestroyWindow(m_hwnd);
+
+    if (m_backBuffer.backDC)
+    {
+        DeleteDC(m_backBuffer.backDC);
+        m_backBuffer.backDC = nullptr;
+    }
+    if (m_backBuffer.backBuffer)
+    {
+        DeleteObject(m_backBuffer.backBuffer);
+        m_backBuffer.backBuffer = nullptr;
+    }
 
     for (auto& pair : m_brushes)
     {
@@ -3160,11 +3178,11 @@ bool cpplot2d::Plot2D::Win32Window::BrowseForFolder(std::string& outFolder)
         if (SHGetPathFromIDList(pidl, szPath))
         {
             std::string result(szPath);
-            CoTaskMemFree(pidl);
+            CoTaskMemFree((LPVOID)pidl);
             outFolder = result;
             return true;
         }
-        CoTaskMemFree(pidl);
+        CoTaskMemFree((LPVOID)pidl);
     }
     return false;
 }
@@ -3189,6 +3207,8 @@ inline LRESULT cpplot2d::Plot2D::Win32Window::HandleMessage(HWND hwnd, UINT uMsg
 
     switch (uMsg)
     {
+        case WM_ERASEBKGND:
+            return 1;
         case WM_PAINT:
         {
             if (!m_useCachedBitmap)
@@ -3523,28 +3543,60 @@ HFONT cpplot2d::Plot2D::Win32Window::CreateFontOfSize(int height, const std::str
 
 void cpplot2d::Plot2D::Win32Window::ResizeBackBuffer(HWND hwnd)
 {
-    HDC windowDC = GetDC(hwnd);
     RECT rc;
-    GetClientRect(hwnd, &rc);
+    if (!GetClientRect(hwnd, &rc))
+    {
+        CPPLOT2D_DEBUG("GetClientRect failed while resizing the back buffer.");
+        return;
+    }
+
     int w = rc.right - rc.left;
     int h = rc.bottom - rc.top;
+    if (w <= 0 || h <= 0) return;
 
-    if (m_backBuffer.backBuffer)
+    HDC windowDC = GetDC(hwnd);
+    if (!windowDC)
     {
-        DeleteObject(m_backBuffer.backBuffer);
-        m_backBuffer.backBuffer = nullptr;
-    }
-    if (m_backBuffer.backDC)
-    {
-        DeleteDC(m_backBuffer.backDC);
-        m_backBuffer.backDC = nullptr;
+        CPPLOT2D_DEBUG("GetDC failed while resizing the back buffer.");
+        return;
     }
 
-    m_backBuffer.backDC = CreateCompatibleDC(windowDC);
-    m_backBuffer.backBuffer = CreateCompatibleBitmap(windowDC, w, h);
+    HDC newBackDC = CreateCompatibleDC(windowDC);
+    HBITMAP newBackBuffer = CreateCompatibleBitmap(windowDC, w, h);
+    if (!newBackDC || !newBackBuffer)
+    {
+        if (newBackDC) DeleteDC(newBackDC);
+        if (newBackBuffer) DeleteObject(newBackBuffer);
+        ReleaseDC(hwnd, windowDC);
+        CPPLOT2D_DEBUG("Failed to create a compatible back buffer.");
+        return;
+    }
 
-    SelectObject(m_backBuffer.backDC, m_backBuffer.backBuffer);
+    HGDIOBJ previousBitmap = SelectObject(newBackDC, newBackBuffer);
+    if (!previousBitmap || previousBitmap == HGDI_ERROR)
+    {
+        DeleteDC(newBackDC);
+        DeleteObject(newBackBuffer);
+        ReleaseDC(hwnd, windowDC);
+        CPPLOT2D_DEBUG("Failed to select the bitmap into the back buffer DC.");
+        return;
+    }
 
+    RECT newBufferRect = {0, 0, w, h};
+    if (!FillRect(newBackDC, &newBufferRect, GetBrushForColor(m_backgroundColor)))
+    {
+        DeleteDC(newBackDC);
+        DeleteObject(newBackBuffer);
+        ReleaseDC(hwnd, windowDC);
+        CPPLOT2D_DEBUG("Failed to initialize the resized back buffer.");
+        return;
+    }
+
+    if (m_backBuffer.backDC) DeleteDC(m_backBuffer.backDC);
+    if (m_backBuffer.backBuffer) DeleteObject(m_backBuffer.backBuffer);
+
+    m_backBuffer.backDC = newBackDC;
+    m_backBuffer.backBuffer = newBackBuffer;
     m_backBuffer.bufferW = w;
     m_backBuffer.bufferH = h;
 
@@ -3631,7 +3683,6 @@ void Plot2D::CocoaGraphicsContext::Shutdown()
 }
 cpplot2d::Plot2D::IWindow* Plot2D::CocoaGraphicsContext::MakeWindow(Color color,
                                                                     Dimension2d defaultSize,
-                                                                    bool isVisible,
                                                                     const std::string& title)
 {
     auto window = new Plot2D::CocoaWindow(defaultSize, Dimension2d(0, 0), title, color);
@@ -4019,7 +4070,7 @@ void cpplot2d::Plot2D::X11GraphicsContext::Shutdown()
 {
 }
 cpplot2d::Plot2D::IWindow* cpplot2d::Plot2D::X11GraphicsContext::MakeWindow(
-    Color color, Dimension2d defaultSize, bool isVisible, const std::string& title)
+    Color color, Dimension2d defaultSize, const std::string& title)
 {
     return new X11Window(defaultSize, Dimension2d(0, 0), title, color);
 }
@@ -4056,7 +4107,6 @@ cpplot2d::Plot2D::X11Window::X11Window(Dimension2d m_defaultWindowSize, Dimensio
     XStoreName(m_display, m_window, title.c_str());
 
     // Create graphics context
-    // TODO: GC cache
     m_gc = XCreateGC(m_display, m_window, 0, nullptr);
     XSetLineAttributes(m_display, m_gc,
                        1,  // line width
@@ -4404,7 +4454,7 @@ void cpplot2d::Plot2D::X11Window::Draw(const GuiCircle& circle)
 
     if (circle.isFilled)
     {
-        XFillArc(m_display, m_backBuffer, m_gc, x, y, d, d, 0, 23040); // 23040 is 360 * 64 (angle)
+        XFillArc(m_display, m_backBuffer, m_gc, x, y, d, d, 0, 23040);  // 23040 is 360 * 64 (angle)
     }
     else
     {
@@ -4461,7 +4511,7 @@ void cpplot2d::Plot2D::X11Window::Draw(const GuiPointCloud& pointcloud)
 {
     Dimension2d size = m_windowDimensions;
     XSetForeground(m_display, m_gc, ToX11Pixel(pointcloud.color));
-    int angle = 23040; // 360 * 64
+    int angle = 23040;  // 360 * 64
     int d = pointcloud.radius * 2;
     for (auto& p : pointcloud.points)
     {

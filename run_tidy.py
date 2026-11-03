@@ -47,6 +47,7 @@ def run_tidy_check(target):
         f"--config-file={TIDY_CONFIG}",
         f"-header-filter=.*",
         f"-p={BUILD_DIR}",
+        "--extra-arg=-std=c++17",
         "--use-color"
     ]
     

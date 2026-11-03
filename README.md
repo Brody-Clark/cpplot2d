@@ -217,7 +217,7 @@ int main()
 
 ## Contributing
 
-Contributions are welcome. Please see [CONTRIBUTING.md](./CONTRIBUTING.md) for more info.
+Please see [CONTRIBUTING.md](./CONTRIBUTING.md) for more info.
 
 ## License
 
