@@ -94,6 +94,10 @@ set(BENCHMARK_ENABLE_TESTING OFF)
 set(BENCHMARK_ENABLE_INSTALL OFF)
 FetchContent_MakeAvailable(benchmark)
 
+if (CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+    target_compile_options(benchmark PRIVATE -Wno-invalid-offsetof)
+endif()
+
 # Create benchmark executable
 add_executable(bench_cpplot2d
     benchmarks/bench_cpplot2d.cpp

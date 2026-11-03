@@ -13,6 +13,7 @@ To keep the codebase clean, stable, and easy to maintain, please follow the guid
 
   * [Formatting with Clang-Format](#formatting-with-clang-format)
   * [Code Quality and Static Analysis with Clang-Tidy](#code-quality-and-static-analysis-with-clang-tidy)
+* [Building with CMake](#building-with-cmake)
 * [Testing](#testing)
 * [How to Create a Pull Request](#how-to-create-a-pull-request)
 
@@ -60,12 +61,6 @@ clang-format -i path/to/your/file.cpp
 clang-format --Werror --dry-run path/to/your/file.cpp
 ```
 
-**Format all staged files (recommended git alias):**
-
-```sh
-alias format="git diff --cached --name-only --diff-filter=ACMRTUXB | grep -E '\.(cpp|cc|c|h|hpp)$' | xargs clang-format -i"
-```
-
 ---
 
 ### Recommended Editor Setup
@@ -74,7 +69,7 @@ It is strongly encouraged to run Clang-Format automatically on save.
 
 | Editor           | Setup                                   |
 | ---------------- | --------------------------------------- |
-| **VS Code**      | C/C++ Extension Pack + “Format on Save” |
+| **VS Code**      | C/C++ Extension Pack + "Format on Save" |
 | **Vim / NeoVim** | LSP or `vim-clang-format`               |
 | **CLion**        | Configure Clang-Format executable       |
 
@@ -114,6 +109,35 @@ A PR **will not be merged** if:
 1. Clang-Format fails
 2. Clang-Tidy reports any **errors**
    (warnings may be acceptable, errors are not)
+
+---
+
+## Building with CMake
+
+Configure and build with the default compiler:
+
+```sh
+cmake -S . -B build
+cmake --build build
+ctest --test-dir build --output-on-failure
+```
+
+To try a different compiler, use a separate build directory and select the compiler when configuring. For example, with GCC or Clang:
+
+```sh
+cmake -S . -B build-clang -DCMAKE_CXX_COMPILER=clang++
+cmake --build build-clang
+```
+
+On Windows, you can configure a Visual Studio build to use MSVC:
+
+```sh
+cmake -S . -B build-msvc -G "Visual Studio 17 2022" -A x64
+cmake --build build-msvc --config Debug
+ctest --test-dir build-msvc -C Debug --output-on-failure
+```
+
+With the Visual Studio generator, executables are placed in a configuration folder such as `build-msvc/Debug`. Use a separate build directory for each compiler because CMake caches the compiler when it first configures a build directory.
 
 ---
 
@@ -172,7 +196,7 @@ Clear PR descriptions enable fast, high-quality reviews.
 | Component   | Requirement              | Example                                                                            |
 | ----------- | ------------------------ | ---------------------------------------------------------------------------------- |
 | **Title**   | Short, descriptive       | `feat: Add axis-aligned grid rendering`                                            |
-| **Summary** | What changed + why       | “Adds optional grid rendering to Plot2D. Improves readability for dense datasets.” |
+| **Summary** | What changed + why       | "Adds optional grid rendering to Plot2D. Improves readability for dense datasets." |
 | **Issues**  | Reference related issues if applicable | `Fixes #42`                                                          |
 
 ---
@@ -211,9 +235,3 @@ Clear PR descriptions enable fast, high-quality reviews.
 * **Do not** change version numbers in PRs unless explicitly requested
 * Assume your changes land in the next `-dev` version
 * Breaking API changes should be clearly documented in the PR description
-
----
-
-## Notes
-
-If you’re unsure whether a change fits the project direction, open an issue or draft PR first. Discussion is encouraged!
