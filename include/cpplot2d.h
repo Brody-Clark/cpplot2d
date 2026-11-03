@@ -1543,6 +1543,7 @@ class Plot2D final
         HMENU m_hMenu = nullptr;
         RECT m_invalidatedRegion = {};
         Dimension2d m_windowDimensions;
+        Color m_backgroundColor;
         std::map<int, std::function<void()>> m_menuCommands;
         bool m_drawnOnce = false;
         std::map<Color, HPEN> m_pens;
@@ -2922,13 +2923,14 @@ cpplot2d::Plot2D::Win32Window::Win32Window(Dimension2d m_defaultWindowSize, Dime
                                            std::string title, Color color)
 {
     m_windowDimensions = m_defaultWindowSize;
+    m_backgroundColor = color;
     // Register window class
     WNDCLASS wc = {};
     wc.lpfnWndProc = WindowProc;
     wc.style = CS_HREDRAW | CS_VREDRAW;
     wc.hInstance = GetModuleHandle(nullptr);
     wc.lpszClassName = TEXT("PlotWindowClass");
-    wc.hbrBackground = GetBrushForColor(color);
+    wc.hbrBackground = nullptr;
 
     if (!RegisterClass(&wc))
     {
@@ -3205,6 +3207,8 @@ inline LRESULT cpplot2d::Plot2D::Win32Window::HandleMessage(HWND hwnd, UINT uMsg
 
     switch (uMsg)
     {
+        case WM_ERASEBKGND:
+            return 1;
         case WM_PAINT:
         {
             if (!m_useCachedBitmap)
@@ -3575,6 +3579,16 @@ void cpplot2d::Plot2D::Win32Window::ResizeBackBuffer(HWND hwnd)
         DeleteObject(newBackBuffer);
         ReleaseDC(hwnd, windowDC);
         CPPLOT2D_DEBUG("Failed to select the bitmap into the back buffer DC.");
+        return;
+    }
+
+    RECT newBufferRect = {0, 0, w, h};
+    if (!FillRect(newBackDC, &newBufferRect, GetBrushForColor(m_backgroundColor)))
+    {
+        DeleteDC(newBackDC);
+        DeleteObject(newBackBuffer);
+        ReleaseDC(hwnd, windowDC);
+        CPPLOT2D_DEBUG("Failed to initialize the resized back buffer.");
         return;
     }
 
